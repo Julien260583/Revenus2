@@ -3,19 +3,10 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // Debug : log la présence de la clé sans l'exposer
   const apiKey = process.env.LODGIFY_API_KEY;
-  console.log('LODGIFY_API_KEY présente ?', !!apiKey);
-  console.log('Toutes les env vars disponibles :', Object.keys(process.env).filter(k => k.startsWith('LODGIFY')));
 
   if (!apiKey) {
-    return res.status(500).json({
-      message: 'LODGIFY_API_KEY non configurée dans les variables Vercel.',
-      debug: {
-        nodeEnv: process.env.NODE_ENV,
-        availableKeys: Object.keys(process.env).filter(k => !k.includes('SECRET') && !k.includes('TOKEN')).slice(0, 20)
-      }
-    });
+    return res.status(500).json({ message: 'LODGIFY_API_KEY non configurée dans les variables Vercel.' });
   }
 
   const { start, end } = req.query;
@@ -24,11 +15,15 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ message: 'Paramètres start et end requis.' });
   }
 
-  const url = `https://api.lodgify.com/v1/reservations/bookings?minArrival=${start}&maxArrival=${end}`;
+  // Lodgify API v2 — paramètres dateFrom / dateTo
+  const url = `https://api.lodgify.com/v2/reservations/bookings?dateFrom=${start}&dateTo=${end}&includeCount=true&size=100`;
 
   try {
     const response = await fetch(url, {
-      headers: { 'X-ApiKey': apiKey }
+      headers: {
+        'X-ApiKey': apiKey,
+        'Accept': 'application/json'
+      }
     });
 
     const body = await response.text();
