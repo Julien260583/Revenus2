@@ -502,6 +502,27 @@
       plugins: { legend: { labels: { color: '#7a7f8e', font: { family: 'DM Sans', size: 12 } } } }
     };
 
+    // ── Calcul prorata : nuits et revenus dans une période donnée ────────
+    function prorataBooking(b, periodStart, periodEnd) {
+      const arrDate  = new Date(b.arrival);
+      const depDate  = new Date(b.departure);
+      const ps = new Date(periodStart);
+      const pe = new Date(periodEnd);
+
+      // Intersection entre la réservation et la période
+      const overlapStart = arrDate < ps ? ps : arrDate;
+      const overlapEnd   = depDate > pe ? pe : depDate;
+
+      if (overlapStart >= overlapEnd) return { nights: 0, amount: 0 };
+
+      const nightsInPeriod = Math.round((overlapEnd - overlapStart) / 86400000);
+      const pricePerNight  = b.nights > 0 ? b.totalAmount / b.nights : 0;
+      return {
+        nights: nightsInPeriod,
+        amount: pricePerNight * nightsInPeriod,
+      };
+    }
+
     function buildMonthlyData(bookings, start, end) {
       const months = {};
       const s = new Date(start), e = new Date(end);
@@ -510,9 +531,14 @@
         months[cur.toISOString().slice(0,7)] = 0;
         cur.setMonth(cur.getMonth() + 1);
       }
-      bookings.forEach(b => {
-        const key = b.arrival.slice(0,7);
-        if (key in months) months[key] += b.totalAmount || 0;
+      Object.keys(months).forEach(key => {
+        const [y, m] = key.split('-').map(Number);
+        const mStart = new Date(y, m - 1, 1);
+        const mEnd   = new Date(y, m, 0); // dernier jour du mois
+        bookings.forEach(b => {
+          const { amount } = prorataBooking(b, mStart, new Date(mEnd.getTime() + 86400000));
+          months[key] += amount;
+        });
       });
       return months;
     }
@@ -581,23 +607,27 @@
     }
 
     // ── Render UI ─────────────────────────────────────────────────────────
-    function renderKPIs(bookings) {
-      const total  = bookings.reduce((a, b) => a + (b.totalAmount||0), 0);
-      const nights = bookings.reduce((a, b) => a + (b.nights||0), 0);
-      const avg    = nights > 0 ? total / nights : 0;
+    function renderKPIs(bookings, start, end) {
+      let total = 0, nights = 0;
+      bookings.forEach(b => {
+        const p = prorataBooking(b, start, new Date(new Date(end).getTime() + 86400000));
+        total  += p.amount;
+        nights += p.nights;
+      });
+      const avg = nights > 0 ? total / nights : 0;
 
       document.getElementById('kpi-revenue').textContent   = total.toLocaleString('fr-FR', { style:'currency', currency:'EUR', maximumFractionDigits:0 });
       document.getElementById('kpi-bookings').textContent  = bookings.length;
       document.getElementById('kpi-nights').textContent    = nights;
       document.getElementById('kpi-avg').textContent       = avg.toLocaleString('fr-FR', { style:'currency', currency:'EUR', maximumFractionDigits:0 });
 
-      document.getElementById('kpi-revenue-trend').textContent  = 'Réservations confirmées uniquement';
-      document.getElementById('kpi-bookings-trend').textContent = `sur la période sélectionnée`;
+      document.getElementById('kpi-revenue-trend').textContent  = 'Revenus au prorata de la période';
+      document.getElementById('kpi-bookings-trend').textContent = 'réservations confirmées';
       document.getElementById('kpi-nights-trend').textContent   = `moy. ${(nights/Math.max(1,bookings.length)).toFixed(1)} nuits/séjour`;
-      document.getElementById('kpi-avg-trend').textContent      = 'par nuit vendue';
+      document.getElementById('kpi-avg-trend').textContent      = 'par nuit dans la période';
     }
 
-    function renderTable(bookings) {
+    function renderTable(bookings, start, end) {
       const tbody = document.getElementById('bookings-table');
       tbody.innerHTML = '';
 
@@ -608,16 +638,18 @@
       };
 
       bookings.slice(0, 25).forEach(b => {
+        const p = prorataBooking(b, start, new Date(new Date(end).getTime() + 86400000));
+        const isPartial = p.nights !== b.nights;
         tbody.innerHTML += `
           <tr>
             <td><strong>${b.property}</strong></td>
             <td>${b.guest || '—'}</td>
             <td>${b.arrival}</td>
             <td>${b.departure}</td>
-            <td>${b.nights || '—'}</td>
+            <td>${p.nights}${isPartial ? ` <span style="color:var(--muted);font-size:11px">(/${b.nights})</span>` : ''}</td>
             <td style="color:var(--muted)">${sourceLabel(b.source)}</td>
             <td style="text-align:right;font-family:'DM Serif Display',serif;color:var(--accent)">
-              ${(b.totalAmount||0).toLocaleString('fr-FR', {style:'currency',currency:'EUR',maximumFractionDigits:0})}
+              ${p.amount.toLocaleString('fr-FR', {style:'currency',currency:'EUR',maximumFractionDigits:0})}${isPartial ? ` <span style="color:var(--muted);font-size:11px">prorata</span>` : ''}
             </td>
           </tr>`;
       });
@@ -701,9 +733,9 @@
       document.getElementById('charts-row').style.display = 'grid';
       document.getElementById('table-card').style.display = 'block';
 
-      renderKPIs(bookings);
+      renderKPIs(bookings, start, end);
       renderCharts(bookings, start, end);
-      renderTable(bookings);
+      renderTable(bookings, start, end);
 
       btn.disabled = false; btn.textContent = 'Analyser';
     }
