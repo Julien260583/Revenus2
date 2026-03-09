@@ -494,39 +494,6 @@
       550914: 'Naturel',
       550915: 'Spa',
     };
-    const PROPERTIES = ['Villa Azur', 'Studio Montmartre', 'Chalet Alpin', 'Appartement Centre'];
-    const SOURCES    = ['airbnb', 'booking', 'direct'];
-    const STATUSES   = ['confirmed', 'confirmed', 'confirmed', 'pending', 'cancelled'];
-
-    function rnd(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
-    function fmtDate(d) { return d.toISOString().split('T')[0]; }
-
-    function generateDemoData(start, end) {
-      const bookings = [];
-      const s = new Date(start), e = new Date(end);
-      const span = (e - s) / 86400000;
-      const count = Math.max(8, Math.min(60, Math.floor(span / 6)));
-
-      for (let i = 0; i < count; i++) {
-        const arrival = new Date(s.getTime() + rnd(0, span - 7) * 86400000);
-        const nights  = rnd(2, 10);
-        const dept    = new Date(arrival.getTime() + nights * 86400000);
-        const priceN  = rnd(85, 280);
-        const total   = priceN * nights;
-        bookings.push({
-          property: PROPERTIES[rnd(0, PROPERTIES.length - 1)],
-          arrival: fmtDate(arrival),
-          departure: fmtDate(dept),
-          nights,
-          source: SOURCES[rnd(0, SOURCES.length - 1)],
-          status: STATUSES[rnd(0, STATUSES.length - 1)],
-          totalAmount: total,
-        });
-      }
-      bookings.sort((a, b) => new Date(b.arrival) - new Date(a.arrival));
-      return { items: bookings };
-    }
-
     // ── Charts ────────────────────────────────────────────────────────────
     let revenueChart, sourceChart;
 
