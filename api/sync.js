@@ -1,16 +1,23 @@
 const { MongoClient } = require('mongodb');
 
-const MONGODB_URI     = process.env.MONGODB_URI;
-const LODGIFY_API_KEY = process.env.LODGIFY_API_KEY;
-
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  if (!MONGODB_URI)     return res.status(500).json({ message: 'MONGODB_URI non configurée.' });
-  if (!LODGIFY_API_KEY) return res.status(500).json({ message: 'LODGIFY_API_KEY non configurée.' });
+  const user        = process.env.MONGODB_USER;
+  const password    = process.env.MONGODB_PASSWORD;
+  const cluster     = process.env.MONGODB_CLUSTER;
+  const lodgifyKey  = process.env.LODGIFY_API_KEY;
 
-  const client = new MongoClient(MONGODB_URI);
+  if (!user || !password || !cluster) {
+    return res.status(500).json({ message: 'Variables MongoDB manquantes.' });
+  }
+  if (!lodgifyKey) {
+    return res.status(500).json({ message: 'LODGIFY_API_KEY non configurée.' });
+  }
+
+  const uri = `mongodb+srv://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${cluster}/lodgify?appName=revenus`;
+  const client = new MongoClient(uri);
 
   try {
     await client.connect();
@@ -20,8 +27,8 @@ module.exports = async function handler(req, res) {
     const toDate   = new Date(new Date().setMonth(new Date().getMonth() + 12))
                        .toISOString().split('T')[0];
 
-    let page = 1;
-    const size = 200;
+    let page     = 1;
+    const size   = 200;
     let total    = 0;
     let upserted = 0;
 
@@ -29,7 +36,7 @@ module.exports = async function handler(req, res) {
       const url = `https://api.lodgify.com/v2/reservations/bookings?dateFrom=${fromDate}&dateTo=${toDate}&includeCount=true&size=${size}&page=${page}`;
 
       const response = await fetch(url, {
-        headers: { 'X-ApiKey': LODGIFY_API_KEY, 'Accept': 'application/json' }
+        headers: { 'X-ApiKey': lodgifyKey, 'Accept': 'application/json' }
       });
 
       if (!response.ok) {
