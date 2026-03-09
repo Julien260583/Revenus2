@@ -119,7 +119,7 @@
     /* Controls */
     .controls {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr auto;
+      grid-template-columns: 1fr 1fr 1fr 1fr auto;
       gap: 12px;
       align-items: end;
       margin-bottom: 48px;
@@ -382,8 +382,7 @@
   <div class="shell">
     <header>
       <div class="logo">
-        <span class="logo-mark">Lodgify</span>
-        <span class="logo-sub">Revenue Dashboard</span>
+        <img src="/logo.png" alt="My Toul'House" style="height:44px; width:auto; object-fit:contain;"/>
       </div>
       <div id="demo-badge" class="demo-badge">
         <span></span> Mode Démo
@@ -407,6 +406,16 @@
           <option value="AirbnbIntegration">Airbnb</option>
           <option value="BookingCom">Booking.com</option>
           <option value="Direct">Direct</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Hébergement</label>
+        <select id="property-filter">
+          <option value="all">Tous les hébergements</option>
+          <option value="550912">Morhange</option>
+          <option value="550913">Scandinave</option>
+          <option value="550914">Naturel</option>
+          <option value="550915">Spa</option>
         </select>
       </div>
       <button class="btn-analyse" id="analyse-btn" onclick="loadData()">
@@ -463,6 +472,7 @@
       <table>
         <thead>
           <tr>
+            <th>Hébergement</th>
             <th>Voyageur</th>
             <th>Arrivée</th>
             <th>Départ</th>
@@ -477,7 +487,13 @@
   </div>
 
   <script>
-    // ── Demo data generator ──────────────────────────────────────────────
+    // ── Property map ─────────────────────────────────────────────────────
+    const PROPERTIES = {
+      550912: 'Morhange',
+      550913: 'Scandinave',
+      550914: 'Naturel',
+      550915: 'Spa',
+    };
     const PROPERTIES = ['Villa Azur', 'Studio Montmartre', 'Chalet Alpin', 'Appartement Centre'];
     const SOURCES    = ['airbnb', 'booking', 'direct'];
     const STATUSES   = ['confirmed', 'confirmed', 'confirmed', 'pending', 'cancelled'];
@@ -627,7 +643,8 @@
       bookings.slice(0, 25).forEach(b => {
         tbody.innerHTML += `
           <tr>
-            <td><strong>${b.guest || '—'}</strong></td>
+            <td><strong>${b.property}</strong></td>
+            <td>${b.guest || '—'}</td>
             <td>${b.arrival}</td>
             <td>${b.departure}</td>
             <td>${b.nights || '—'}</td>
@@ -686,7 +703,8 @@
         else status = 'cancelled'; // Declined, CancelledByGuest, etc.
 
         return {
-          property:    `Propriété #${b.property_id}`,
+          property_id: b.property_id,
+          property:    PROPERTIES[b.property_id] || `Propriété #${b.property_id}`,
           arrival:     b.arrival,
           departure:   b.departure,
           nights,
@@ -699,6 +717,10 @@
 
       // Garder uniquement les réservations confirmées
       bookings = bookings.filter(b => b.status === 'confirmed');
+
+      // Property filter
+      const propFilter = document.getElementById('property-filter').value;
+      if (propFilter !== 'all') bookings = bookings.filter(b => String(b.property_id) === propFilter);
 
       // Source filter
       const srcFilter = document.getElementById('source-filter').value;
