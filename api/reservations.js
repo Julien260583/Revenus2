@@ -2,15 +2,6 @@ const { MongoClient } = require('mongodb');
 
 const MONGODB_URI = process.env.MONGODB_URI;
 
-let client;
-async function getDb() {
-  if (!client) {
-    client = new MongoClient(MONGODB_URI);
-    await client.connect();
-  }
-  return client.db('lodgify').collection('reservations');
-}
-
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -21,10 +12,12 @@ module.exports = async function handler(req, res) {
   const { start, end } = req.query;
   if (!start || !end) return res.status(400).json({ message: 'Paramètres start et end requis.' });
 
-  try {
-    const col = await getDb();
+  const client = new MongoClient(MONGODB_URI);
 
-    // Récupère toutes les réservations dont le séjour chevauche la période
+  try {
+    await client.connect();
+    const col = client.db('lodgify').collection('reservations');
+
     const items = await col.find({
       arrival:   { $lte: end },
       departure: { $gte: start }
@@ -34,5 +27,7 @@ module.exports = async function handler(req, res) {
 
   } catch (err) {
     return res.status(500).json({ message: 'Erreur MongoDB', details: err.message });
+  } finally {
+    await client.close();
   }
 };

@@ -1,35 +1,28 @@
 const { MongoClient } = require('mongodb');
 
-const MONGODB_URI = process.env.MONGODB_URI;
+const MONGODB_URI     = process.env.MONGODB_URI;
 const LODGIFY_API_KEY = process.env.LODGIFY_API_KEY;
-
-let client;
-async function getDb() {
-  if (!client) {
-    client = new MongoClient(MONGODB_URI);
-    await client.connect();
-  }
-  return client.db('lodgify').collection('reservations');
-}
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  if (!MONGODB_URI)        return res.status(500).json({ message: 'MONGODB_URI non configurée.' });
-  if (!LODGIFY_API_KEY)    return res.status(500).json({ message: 'LODGIFY_API_KEY non configurée.' });
+  if (!MONGODB_URI)     return res.status(500).json({ message: 'MONGODB_URI non configurée.' });
+  if (!LODGIFY_API_KEY) return res.status(500).json({ message: 'LODGIFY_API_KEY non configurée.' });
+
+  const client = new MongoClient(MONGODB_URI);
 
   try {
-    const col = await getDb();
+    await client.connect();
+    const col = client.db('lodgify').collection('reservations');
 
-    // Récupère toutes les réservations depuis 2020 jusqu'à M+12
     const fromDate = '2020-01-01';
     const toDate   = new Date(new Date().setMonth(new Date().getMonth() + 12))
                        .toISOString().split('T')[0];
 
     let page = 1;
     const size = 200;
-    let total = 0;
+    let total    = 0;
     let upserted = 0;
 
     while (true) {
@@ -44,13 +37,11 @@ module.exports = async function handler(req, res) {
         return res.status(response.status).json({ message: `Erreur Lodgify (${response.status})`, details: body });
       }
 
-      const data = await response.json();
+      const data  = await response.json();
       const items = data.items || [];
       if (total === 0) total = data.count || 0;
-
       if (items.length === 0) break;
 
-      // Upsert chaque réservation par son id
       const ops = items.map(b => ({
         updateOne: {
           filter: { id: b.id },
@@ -66,13 +57,11 @@ module.exports = async function handler(req, res) {
       page++;
     }
 
-    return res.status(200).json({
-      message: 'Sync terminée',
-      total,
-      upserted
-    });
+    return res.status(200).json({ message: 'Sync terminée', total, upserted });
 
   } catch (err) {
     return res.status(500).json({ message: 'Erreur sync', details: err.message });
+  } finally {
+    await client.close();
   }
 };
