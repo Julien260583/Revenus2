@@ -460,6 +460,11 @@
         <div class="kpi-value gold" id="kpi-avg">—</div>
         <div class="kpi-trend" id="kpi-avg-trend"></div>
       </div>
+      <div class="kpi-card green" style="grid-column: 1 / -1">
+        <div class="kpi-label">Revenus Nets <span style="font-size:10px;font-weight:400;color:var(--muted)">− 40€ prestation − 23% commission plateforme</span></div>
+        <div class="kpi-value" style="color:var(--accent3)" id="kpi-net">—</div>
+        <div class="kpi-trend" id="kpi-net-trend"></div>
+      </div>
     </div>
 
     <!-- Charts -->
@@ -491,6 +496,7 @@
             <th>Source</th>
             <th style="text-align:right">Revenu total</th>
             <th style="text-align:right">Prorata période</th>
+            <th style="text-align:right">Net (prorata)</th>
           </tr>
         </thead>
         <tbody id="bookings-table"></tbody>
@@ -618,25 +624,46 @@
       });
     }
 
+    // ── Calcul revenu net par réservation ────────────────────────────────
+    const PLATFORM_SOURCES = ['AirbnbIntegration', 'BookingCom'];
+    const SERVICE_FEE  = 40;    // € par réservation
+    const COMMISSION   = 0.23;  // 23% sur les plateformes
+
+    function netRevenue(booking) {
+      const gross = booking.totalAmount || 0;
+      const fee   = SERVICE_FEE;
+      const comm  = PLATFORM_SOURCES.includes(booking.source) ? gross * COMMISSION : 0;
+      return Math.max(0, gross - fee - comm);
+    }
+
     // ── Render UI ─────────────────────────────────────────────────────────
     function renderKPIs(bookings, start, end) {
-      let total = 0, nights = 0;
+      const periodEnd1 = new Date(new Date(end).getTime() + 86400000);
+      let total = 0, nights = 0, net = 0;
+
       bookings.forEach(b => {
-        const p = prorataBooking(b, start, new Date(new Date(end).getTime() + 86400000));
+        const p     = prorataBooking(b, start, periodEnd1);
+        const ratio = b.nights > 0 ? p.nights / b.nights : 1;
         total  += p.amount;
         nights += p.nights;
+        // Net prorata : on applique le ratio de nuits aux déductions fixes aussi
+        const bookingNet = netRevenue(b);
+        net += bookingNet * ratio;
       });
+
       const avg = nights > 0 ? total / nights : 0;
 
-      document.getElementById('kpi-revenue').textContent   = total.toLocaleString('fr-FR', { style:'currency', currency:'EUR', maximumFractionDigits:0 });
-      document.getElementById('kpi-bookings').textContent  = bookings.length;
-      document.getElementById('kpi-nights').textContent    = nights;
-      document.getElementById('kpi-avg').textContent       = avg.toLocaleString('fr-FR', { style:'currency', currency:'EUR', maximumFractionDigits:0 });
+      document.getElementById('kpi-revenue').textContent  = total.toLocaleString('fr-FR', { style:'currency', currency:'EUR', maximumFractionDigits:0 });
+      document.getElementById('kpi-bookings').textContent = bookings.length;
+      document.getElementById('kpi-nights').textContent   = nights;
+      document.getElementById('kpi-avg').textContent      = avg.toLocaleString('fr-FR', { style:'currency', currency:'EUR', maximumFractionDigits:0 });
+      document.getElementById('kpi-net').textContent      = net.toLocaleString('fr-FR', { style:'currency', currency:'EUR', maximumFractionDigits:0 });
 
       document.getElementById('kpi-revenue-trend').textContent  = 'Revenus au prorata de la période';
       document.getElementById('kpi-bookings-trend').textContent = 'réservations confirmées';
       document.getElementById('kpi-nights-trend').textContent   = `moy. ${(nights/Math.max(1,bookings.length)).toFixed(1)} nuits/séjour`;
       document.getElementById('kpi-avg-trend').textContent      = 'par nuit dans la période';
+      document.getElementById('kpi-net-trend').textContent      = `déductions : ${bookings.length} × 40€ prestation + 23% commission plateformes`;
     }
 
     function renderTable(bookings) {
@@ -651,6 +678,9 @@
 
       bookings.slice(0, 25).forEach(b => {
         const isPartial = b.prorataMaxNights !== b.nights;
+        const ratio     = b.nights > 0 ? b.prorataMaxNights / b.nights : 1;
+        const netTotal  = netRevenue(b);
+        const netProrata = netTotal * ratio;
         tbody.innerHTML += `
           <tr>
             <td><strong>${b.property}</strong></td>
@@ -665,6 +695,9 @@
             <td style="text-align:right;font-family:'DM Serif Display',serif;color:var(--accent)">
               ${b.prorataAmount.toLocaleString('fr-FR', {style:'currency',currency:'EUR',maximumFractionDigits:0})}
               ${isPartial ? '<span style="color:var(--muted);font-size:10px;display:block">prorata</span>' : ''}
+            </td>
+            <td style="text-align:right;font-family:'DM Serif Display',serif;color:var(--accent3)">
+              ${netProrata.toLocaleString('fr-FR', {style:'currency',currency:'EUR',maximumFractionDigits:0})}
             </td>
           </tr>`;
       });
