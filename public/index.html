@@ -384,8 +384,19 @@
       <div class="logo">
         <img src="/logo.png" alt="My Toul'House" style="height:44px; width:auto; object-fit:contain;"/>
       </div>
-      <div id="demo-badge" class="demo-badge">
-        <span></span> Mode Démo
+      <div style="display:flex;align-items:center;gap:12px">
+        <button onclick="syncData()" id="sync-btn" style="
+          background:transparent;border:1px solid var(--border);border-radius:8px;
+          padding:8px 16px;color:var(--muted);font-family:'DM Sans',sans-serif;
+          font-size:12px;font-weight:600;cursor:pointer;letter-spacing:1px;
+          text-transform:uppercase;transition:all 0.2s;
+        " onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+           onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
+          ↻ Synchroniser
+        </button>
+        <div id="demo-badge" class="demo-badge" style="display:none">
+          <span></span> Mode Démo
+        </div>
       </div>
     </header>
 
@@ -658,6 +669,30 @@
           </tr>`;
       });
       document.getElementById('table-count').textContent = `${bookings.length} réservation${bookings.length>1?'s':''}`;
+    }
+
+    // ── Sync Lodgify → MongoDB ────────────────────────────────────────────
+    async function syncData() {
+      const btn = document.getElementById('sync-btn');
+      btn.textContent = '↻ Sync en cours…';
+      btn.disabled = true;
+
+      try {
+        const res  = await fetch('/api/sync');
+        const data = await res.json();
+        if (res.ok) {
+          btn.textContent = `✓ ${data.upserted} màj`;
+          setTimeout(() => { btn.textContent = '↻ Synchroniser'; btn.disabled = false; }, 3000);
+          loadData();
+        } else {
+          btn.textContent = '✗ Erreur';
+          btn.disabled = false;
+          alert(data.message);
+        }
+      } catch (err) {
+        btn.textContent = '✗ Erreur';
+        btn.disabled = false;
+      }
     }
 
     // ── Main load function ────────────────────────────────────────────────
