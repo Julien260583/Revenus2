@@ -463,12 +463,11 @@
       <table>
         <thead>
           <tr>
-            <th>Propriété</th>
+            <th>Voyageur</th>
             <th>Arrivée</th>
             <th>Départ</th>
             <th>Nuits</th>
             <th>Source</th>
-            <th>Statut</th>
             <th style="text-align:right">Montant</th>
           </tr>
         </thead>
@@ -600,19 +599,18 @@
 
     // ── Render UI ─────────────────────────────────────────────────────────
     function renderKPIs(bookings) {
-      const confirmed = bookings.filter(b => b.status === 'confirmed');
-      const total   = confirmed.reduce((a, b) => a + (b.totalAmount||0), 0);
-      const nights  = confirmed.reduce((a, b) => a + (b.nights||0), 0);
-      const avg     = nights > 0 ? total / nights : 0;
+      const total  = bookings.reduce((a, b) => a + (b.totalAmount||0), 0);
+      const nights = bookings.reduce((a, b) => a + (b.nights||0), 0);
+      const avg    = nights > 0 ? total / nights : 0;
 
       document.getElementById('kpi-revenue').textContent   = total.toLocaleString('fr-FR', { style:'currency', currency:'EUR', maximumFractionDigits:0 });
-      document.getElementById('kpi-bookings').textContent  = confirmed.length;
+      document.getElementById('kpi-bookings').textContent  = bookings.length;
       document.getElementById('kpi-nights').textContent    = nights;
       document.getElementById('kpi-avg').textContent       = avg.toLocaleString('fr-FR', { style:'currency', currency:'EUR', maximumFractionDigits:0 });
 
       document.getElementById('kpi-revenue-trend').textContent  = 'Réservations confirmées uniquement';
-      document.getElementById('kpi-bookings-trend').textContent = `dont ${bookings.filter(b=>b.status==='pending').length} en attente · ${bookings.filter(b=>b.status==='cancelled').length} refusées`;
-      document.getElementById('kpi-nights-trend').textContent   = `moy. ${(nights/Math.max(1,confirmed.length)).toFixed(1)} nuits/séjour`;
+      document.getElementById('kpi-bookings-trend').textContent = `sur la période sélectionnée`;
+      document.getElementById('kpi-nights-trend').textContent   = `moy. ${(nights/Math.max(1,bookings.length)).toFixed(1)} nuits/séjour`;
       document.getElementById('kpi-avg-trend').textContent      = 'par nuit vendue';
     }
 
@@ -627,8 +625,6 @@
       };
 
       bookings.slice(0, 25).forEach(b => {
-        const statusClass = b.status === 'confirmed' ? 'confirmed' : b.status === 'pending' ? 'pending' : 'cancelled';
-        const statusLabel = b.status === 'confirmed' ? 'Confirmé' : b.status === 'pending' ? 'En attente' : 'Annulé';
         tbody.innerHTML += `
           <tr>
             <td><strong>${b.guest || '—'}</strong></td>
@@ -636,7 +632,6 @@
             <td>${b.departure}</td>
             <td>${b.nights || '—'}</td>
             <td style="color:var(--muted)">${sourceLabel(b.source)}</td>
-            <td><span class="status-badge status-${statusClass}">${statusLabel}</span></td>
             <td style="text-align:right;font-family:'DM Serif Display',serif;color:var(--accent)">
               ${(b.totalAmount||0).toLocaleString('fr-FR', {style:'currency',currency:'EUR',maximumFractionDigits:0})}
             </td>
@@ -701,6 +696,9 @@
           guest:       b.guest?.name || '—',
         };
       });
+
+      // Garder uniquement les réservations confirmées
+      bookings = bookings.filter(b => b.status === 'confirmed');
 
       // Source filter
       const srcFilter = document.getElementById('source-filter').value;
