@@ -392,12 +392,12 @@
     <!-- Controls -->
     <div class="controls">
       <div class="field">
-        <label>Date de début</label>
-        <input type="date" id="start-date" value="2024-01-01"/>
+        <label>Mois de début</label>
+        <input type="month" id="start-date"/>
       </div>
       <div class="field">
-        <label>Date de fin</label>
-        <input type="date" id="end-date" value="2024-12-31"/>
+        <label>Mois de fin</label>
+        <input type="month" id="end-date"/>
       </div>
       <div class="field">
         <label>Source</label>
@@ -659,13 +659,18 @@
 
     // ── Main load function ────────────────────────────────────────────────
     async function loadData() {
-      const start = document.getElementById('start-date').value;
-      const end   = document.getElementById('end-date').value;
-      const btn   = document.getElementById('analyse-btn');
-      const errBanner = document.getElementById('error-banner');
+      const monthStart = document.getElementById('start-date').value;
+      const monthEnd   = document.getElementById('end-date').value;
+      const btn        = document.getElementById('analyse-btn');
+      const errBanner  = document.getElementById('error-banner');
 
-      if (!start || !end) { showError('Veuillez sélectionner une période.'); return; }
-      if (new Date(start) > new Date(end)) { showError('La date de début doit être avant la date de fin.'); return; }
+      if (!monthStart || !monthEnd) { showError('Veuillez sélectionner une période.'); return; }
+      if (monthStart > monthEnd) { showError('Le mois de début doit être avant le mois de fin.'); return; }
+
+      // Convertir YYYY-MM en premier/dernier jour du mois
+      const start = `${monthStart}-01`;
+      const [ey, em] = monthEnd.split('-').map(Number);
+      const end = `${monthEnd}-${String(new Date(ey, em, 0).getDate()).padStart(2,'0')}`;
 
       btn.disabled = true; btn.textContent = 'Chargement…';
       errBanner.classList.remove('visible');
@@ -748,10 +753,9 @@
     // Auto-load on start
     window.addEventListener('DOMContentLoaded', () => {
       const today = new Date();
-      const janFirst = new Date(today.getFullYear(), 0, 1).toISOString().split('T')[0];
-      const decLast  = new Date(today.getFullYear(), 11, 31).toISOString().split('T')[0];
-      document.getElementById('start-date').value = janFirst;
-      document.getElementById('end-date').value   = decLast;
+      const year  = today.getFullYear();
+      document.getElementById('start-date').value = `${year}-01`;
+      document.getElementById('end-date').value   = `${year}-12`;
       loadData();
     });
   </script>
