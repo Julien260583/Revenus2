@@ -704,7 +704,7 @@
         // Status normalization
         const rawStatus = b.status || '';
         let status;
-        if (['Booked', 'CheckedIn', 'CheckedOut', 'Agreed'].includes(rawStatus)) status = 'confirmed';
+        if (['Booked', 'CheckedIn', 'CheckedOut', 'Agreed', 'Open'].includes(rawStatus)) status = 'confirmed';
         else if (['Tentative', 'Enquiry'].includes(rawStatus)) status = 'pending';
         else status = 'cancelled'; // Declined, CancelledByGuest, etc.
 
@@ -763,9 +763,11 @@
     // Auto-load on start
     window.addEventListener('DOMContentLoaded', () => {
       const today = new Date();
-      const year  = today.getFullYear();
-      document.getElementById('start-date').value = `${year}-01`;
-      document.getElementById('end-date').value   = `${year}-12`;
+      const m12 = new Date(today.getFullYear(), today.getMonth() - 12, 1);
+      const p6  = new Date(today.getFullYear(), today.getMonth() + 6,  1);
+      const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}`;
+      document.getElementById('start-date').value = fmt(m12);
+      document.getElementById('end-date').value   = fmt(p6);
       loadData();
     });
   </script>
