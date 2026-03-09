@@ -1,5 +1,8 @@
 {
   "name": "lodgify-dashboard",
   "version": "1.0.0",
-  "description": "Lodgify Revenue Dashboard"
+  "description": "Lodgify Revenue Dashboard — Vercel + MongoDB",
+  "dependencies": {
+    "mongodb": "^6.3.0"
+  }
 }
