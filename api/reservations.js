@@ -15,8 +15,13 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ message: 'Paramètres start et end requis.' });
   }
 
-  // Lodgify API v2 — paramètres dateFrom / dateTo
-  const url = `https://api.lodgify.com/v2/reservations/bookings?dateFrom=${start}&dateTo=${end}&includeCount=true&size=100`;
+  // Lodgify filtre sur la date d'arrivée — on élargit de 90j avant le début
+  // pour capturer les réservations arrivées avant la période mais chevauchant
+  const startDate = new Date(start);
+  startDate.setDate(startDate.getDate() - 90);
+  const widenedStart = startDate.toISOString().split('T')[0];
+
+  const url = `https://api.lodgify.com/v2/reservations/bookings?dateFrom=${widenedStart}&dateTo=${end}&includeCount=true&size=200`;
 
   try {
     const response = await fetch(url, {
