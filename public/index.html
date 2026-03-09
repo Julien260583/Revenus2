@@ -390,16 +390,6 @@
       </div>
     </header>
 
-    <div class="config-tip">
-      <div class="config-tip-icon">💡</div>
-      <div>
-        <strong style="color:var(--text)">Configuration de la clé API</strong><br>
-        Pour connecter vos vraies données, lancez votre serveur Node.js avec la variable d'environnement :
-        <code>LODGIFY_API_KEY=votre_clé</code> puis <code>node index.js</code>.
-        Le dashboard basculera automatiquement sur vos données réelles. <strong style="color:var(--text)">En attendant, explorez avec les données de démo ci-dessous.</strong>
-      </div>
-    </div>
-
     <!-- Controls -->
     <div class="controls">
       <div class="field">
@@ -414,9 +404,9 @@
         <label>Source</label>
         <select id="source-filter">
           <option value="all">Toutes les sources</option>
-          <option value="airbnb">Airbnb</option>
-          <option value="booking">Booking.com</option>
-          <option value="direct">Direct</option>
+          <option value="AirbnbIntegration">Airbnb</option>
+          <option value="BookingCom">Booking.com</option>
+          <option value="Direct">Direct</option>
         </select>
       </div>
       <button class="btn-analyse" id="analyse-btn" onclick="loadData()">
@@ -582,13 +572,14 @@
       });
 
       // Source donut
+      const sourceLabels = { AirbnbIntegration: 'Airbnb', BookingCom: 'Booking.com', Direct: 'Direct' };
       const sourceTotals = {};
       bookings.forEach(b => { sourceTotals[b.source] = (sourceTotals[b.source]||0) + (b.totalAmount||0); });
       if (sourceChart) sourceChart.destroy();
       sourceChart = new Chart(document.getElementById('sourceChart'), {
         type: 'doughnut',
         data: {
-          labels: Object.keys(sourceTotals).map(s => s.charAt(0).toUpperCase() + s.slice(1)),
+          labels: Object.keys(sourceTotals).map(s => sourceLabels[s] || s),
           datasets: [{
             data: Object.values(sourceTotals),
             backgroundColor: ['rgba(232,194,122,0.7)', 'rgba(122,184,232,0.7)', 'rgba(122,232,184,0.7)'],
@@ -609,7 +600,7 @@
 
     // ── Render UI ─────────────────────────────────────────────────────────
     function renderKPIs(bookings) {
-      const confirmed = bookings.filter(b => b.status !== 'cancelled');
+      const confirmed = bookings.filter(b => b.status === 'confirmed');
       const total   = confirmed.reduce((a, b) => a + (b.totalAmount||0), 0);
       const nights  = confirmed.reduce((a, b) => a + (b.nights||0), 0);
       const avg     = nights > 0 ? total / nights : 0;
@@ -619,8 +610,8 @@
       document.getElementById('kpi-nights').textContent    = nights;
       document.getElementById('kpi-avg').textContent       = avg.toLocaleString('fr-FR', { style:'currency', currency:'EUR', maximumFractionDigits:0 });
 
-      document.getElementById('kpi-revenue-trend').textContent  = 'Réservations confirmées';
-      document.getElementById('kpi-bookings-trend').textContent = `dont ${bookings.filter(b=>b.status==='pending').length} en attente`;
+      document.getElementById('kpi-revenue-trend').textContent  = 'Réservations confirmées uniquement';
+      document.getElementById('kpi-bookings-trend').textContent = `dont ${bookings.filter(b=>b.status==='pending').length} en attente · ${bookings.filter(b=>b.status==='cancelled').length} refusées`;
       document.getElementById('kpi-nights-trend').textContent   = `moy. ${(nights/Math.max(1,confirmed.length)).toFixed(1)} nuits/séjour`;
       document.getElementById('kpi-avg-trend').textContent      = 'par nuit vendue';
     }
@@ -628,17 +619,23 @@
     function renderTable(bookings) {
       const tbody = document.getElementById('bookings-table');
       tbody.innerHTML = '';
+
+      const sourceLabel = s => {
+        if (s === 'AirbnbIntegration') return 'Airbnb';
+        if (s === 'BookingCom') return 'Booking.com';
+        return s || 'Direct';
+      };
+
       bookings.slice(0, 25).forEach(b => {
         const statusClass = b.status === 'confirmed' ? 'confirmed' : b.status === 'pending' ? 'pending' : 'cancelled';
         const statusLabel = b.status === 'confirmed' ? 'Confirmé' : b.status === 'pending' ? 'En attente' : 'Annulé';
-        const src = b.source ? (b.source.charAt(0).toUpperCase() + b.source.slice(1)) : '—';
         tbody.innerHTML += `
           <tr>
-            <td><strong>${b.property || b.propertyName || '—'}</strong></td>
+            <td><strong>${b.guest || '—'}</strong></td>
             <td>${b.arrival}</td>
             <td>${b.departure}</td>
             <td>${b.nights || '—'}</td>
-            <td style="color:var(--muted)">${src}</td>
+            <td style="color:var(--muted)">${sourceLabel(b.source)}</td>
             <td><span class="status-badge status-${statusClass}">${statusLabel}</span></td>
             <td style="text-align:right;font-family:'DM Serif Display',serif;color:var(--accent)">
               ${(b.totalAmount||0).toLocaleString('fr-FR', {style:'currency',currency:'EUR',maximumFractionDigits:0})}
@@ -681,18 +678,29 @@
       // Update demo badge
       document.getElementById('demo-badge').style.display = isDemo ? 'inline-flex' : 'none';
 
-      // Process data - normalize Lodgify fields if needed
-      let bookings = (data.items || []).map(b => ({
-        property:    b.property || b.property_name || b.propertyName || 'Propriété',
-        arrival:     b.arrival  || b.arrival_date  || b.check_in     || b.arrival,
-        departure:   b.departure|| b.departure_date|| b.check_out    || b.departure,
-        nights:      b.nights   || b.nights_count  || (b.arrival && b.departure
-                       ? Math.round((new Date(b.departure||b.check_out) - new Date(b.arrival||b.check_in)) / 86400000)
-                       : 0),
-        source:      b.source   || b.channel       || b.source_name  || 'direct',
-        status:      b.status   || 'confirmed',
-        totalAmount: b.totalAmount || b.total_amount || b.amount || b.price || 0,
-      }));
+      // Normalize Lodgify v2 fields
+      let bookings = (data.items || []).map(b => {
+        const nights = Math.round((new Date(b.departure) - new Date(b.arrival)) / 86400000);
+        // Source label
+        let source = b.source || 'Direct';
+        // Status normalization
+        const rawStatus = b.status || '';
+        let status;
+        if (['Booked', 'CheckedIn', 'CheckedOut', 'Agreed'].includes(rawStatus)) status = 'confirmed';
+        else if (['Tentative', 'Enquiry'].includes(rawStatus)) status = 'pending';
+        else status = 'cancelled'; // Declined, CancelledByGuest, etc.
+
+        return {
+          property:    `Propriété #${b.property_id}`,
+          arrival:     b.arrival,
+          departure:   b.departure,
+          nights,
+          source,
+          status,
+          totalAmount: b.total_amount || 0,
+          guest:       b.guest?.name || '—',
+        };
+      });
 
       // Source filter
       const srcFilter = document.getElementById('source-filter').value;
