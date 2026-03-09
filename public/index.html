@@ -800,7 +800,7 @@
         // Status normalization
         const rawStatus = b.status || '';
         let status;
-        if (['Booked', 'CheckedIn', 'CheckedOut', 'Agreed', 'Open'].includes(rawStatus)) status = 'confirmed';
+        if (['Booked', 'CheckedIn', 'CheckedOut', 'Agreed'].includes(rawStatus)) status = 'confirmed';
         else if (['Tentative', 'Enquiry'].includes(rawStatus)) status = 'pending';
         else status = 'cancelled'; // Declined, CancelledByGuest, etc.
 
