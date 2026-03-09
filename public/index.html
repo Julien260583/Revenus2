@@ -116,58 +116,110 @@
       50% { opacity: 0.3; }
     }
 
-    /* Controls */
-    .controls {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr 1fr auto;
-      gap: 12px;
-      align-items: end;
+    /* Controls filters kept in timeline-wrap */
+
+    /* Timeline slider */
+    .timeline-wrap {
       margin-bottom: 48px;
-      padding: 24px;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 16px;
+      padding: 24px 28px 20px;
     }
-    .field label {
-      display: block;
+    .timeline-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      gap: 16px;
+    }
+    .timeline-label {
       font-size: 11px;
       text-transform: uppercase;
       letter-spacing: 1.5px;
       color: var(--muted);
       font-weight: 600;
-      margin-bottom: 8px;
     }
-    .field input, .field select {
-      width: 100%;
+    .timeline-range-label {
+      font-family: 'DM Serif Display', serif;
+      font-size: 18px;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+    }
+    .timeline-filters {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .timeline-filters select {
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 10px 14px;
+      padding: 8px 12px;
       color: var(--text);
       font-family: 'DM Sans', sans-serif;
-      font-size: 14px;
+      font-size: 13px;
       outline: none;
-      transition: border-color 0.2s;
       cursor: pointer;
+      transition: border-color 0.2s;
     }
-    .field input:focus, .field select:focus { border-color: var(--accent); }
-    .field input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.6); }
+    .timeline-filters select:focus { border-color: var(--accent); }
 
+    /* Frise */
+    .timeline-track {
+      position: relative;
+      height: 48px;
+      user-select: none;
+    }
+    .timeline-months {
+      display: flex;
+      height: 100%;
+      gap: 2px;
+    }
+    .timeline-month {
+      flex: 1;
+      border-radius: 4px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.15s;
+      position: relative;
+      min-width: 0;
+    }
+    .timeline-month.selected {
+      background: rgba(232,194,122,0.2);
+      border-color: rgba(232,194,122,0.5);
+    }
+    .timeline-month.selected.first { border-radius: 6px 2px 2px 6px; }
+    .timeline-month.selected.last  { border-radius: 2px 6px 6px 2px; }
+    .timeline-month:hover { border-color: var(--accent); }
+    .timeline-tick {
+      position: absolute;
+      bottom: -18px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 9px;
+      color: var(--muted);
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    .timeline-bottom {
+      height: 20px;
+    }
     .btn-analyse {
       background: var(--accent);
       color: #0d0f14;
       border: none;
       border-radius: 8px;
-      padding: 10px 24px;
+      padding: 9px 20px;
       font-family: 'DM Sans', sans-serif;
       font-weight: 600;
-      font-size: 14px;
+      font-size: 13px;
       cursor: pointer;
       transition: all 0.2s;
       white-space: nowrap;
     }
-    .btn-analyse:hover { background: #f0d28a; transform: translateY(-1px); }
-    .btn-analyse:active { transform: translateY(0); }
+    .btn-analyse:hover { background: #f0d28a; }
     .btn-analyse:disabled { opacity: 0.5; cursor: not-allowed; }
 
     /* KPI Grid */
@@ -400,39 +452,38 @@
       </div>
     </header>
 
-    <!-- Controls -->
-    <div class="controls">
-      <div class="field">
-        <label>Mois de début</label>
-        <input type="month" id="start-date"/>
+    <!-- Timeline range picker -->
+    <div class="timeline-wrap">
+      <div class="timeline-top">
+        <div>
+          <div class="timeline-label">Période sélectionnée</div>
+          <div class="timeline-range-label" id="range-label">—</div>
+        </div>
+        <div class="timeline-filters">
+          <select id="source-filter" onchange="loadData()">
+            <option value="all">Toutes les sources</option>
+            <option value="AirbnbIntegration">Airbnb</option>
+            <option value="BookingCom">Booking.com</option>
+            <option value="Direct">Direct</option>
+          </select>
+          <select id="property-filter" onchange="loadData()">
+            <option value="all">Tous les hébergements</option>
+            <option value="550912">Morhange</option>
+            <option value="550913">Scandinave</option>
+            <option value="550914">Naturel</option>
+            <option value="550915">Spa</option>
+          </select>
+          <button class="btn-analyse" id="analyse-btn" onclick="loadData()">Analyser</button>
+        </div>
       </div>
-      <div class="field">
-        <label>Mois de fin</label>
-        <input type="month" id="end-date"/>
+      <div class="timeline-track" id="timeline-track">
+        <div class="timeline-months" id="timeline-months"></div>
+        <div class="timeline-bottom"></div>
       </div>
-      <div class="field">
-        <label>Source</label>
-        <select id="source-filter">
-          <option value="all">Toutes les sources</option>
-          <option value="AirbnbIntegration">Airbnb</option>
-          <option value="BookingCom">Booking.com</option>
-          <option value="Direct">Direct</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Hébergement</label>
-        <select id="property-filter">
-          <option value="all">Tous les hébergements</option>
-          <option value="550912">Morhange</option>
-          <option value="550913">Scandinave</option>
-          <option value="550914">Naturel</option>
-          <option value="550915">Spa</option>
-        </select>
-      </div>
-      <button class="btn-analyse" id="analyse-btn" onclick="loadData()">
-        Analyser
-      </button>
     </div>
+    <!-- Hidden inputs for compatibility -->
+    <input type="hidden" id="start-date"/>
+    <input type="hidden" id="end-date"/>
 
     <div id="error-banner">
       ⚠️ <span id="error-msg"></span>
@@ -789,6 +840,128 @@
       }
     }
 
+    // ── Timeline slider ───────────────────────────────────────────────────
+    const MONTHS_FR = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+    let tlMonths = [];   // [{key:'2025-03', label:'Mar 25'}, ...]
+    let tlStart  = 0;    // index sélectionné début
+    let tlEnd    = 0;    // index sélectionné fin
+    let tlDragging = null; // 'start' | 'end' | 'range'
+    let tlDragStartX = 0, tlDragStartIdx = 0;
+
+    function buildTimeline() {
+      const today = new Date();
+      // M-18 à M+9
+      const from = new Date(today.getFullYear(), today.getMonth() - 18, 1);
+      const to   = new Date(today.getFullYear(), today.getMonth() + 9,  1);
+      tlMonths = [];
+      let cur = new Date(from);
+      while (cur <= to) {
+        const y = cur.getFullYear(), m = cur.getMonth();
+        tlMonths.push({ key: `${y}-${String(m+1).padStart(2,'0')}`, label: MONTHS_FR[m], year: y, month: m });
+        cur.setMonth(cur.getMonth() + 1);
+      }
+      // Défaut : M-12 à M+6
+      const defaultStart = new Date(today.getFullYear(), today.getMonth() - 12, 1);
+      const defaultEnd   = new Date(today.getFullYear(), today.getMonth() + 6,  1);
+      tlStart = tlMonths.findIndex(m => m.key === fmtMonth(defaultStart));
+      tlEnd   = tlMonths.findIndex(m => m.key === fmtMonth(defaultEnd));
+      if (tlStart < 0) tlStart = 0;
+      if (tlEnd   < 0) tlEnd   = tlMonths.length - 1;
+      renderTimeline();
+    }
+
+    function fmtMonth(d) {
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    }
+
+    function renderTimeline() {
+      const container = document.getElementById('timeline-months');
+      container.innerHTML = '';
+      tlMonths.forEach((m, i) => {
+        const el = document.createElement('div');
+        el.className = 'timeline-month' +
+          (i >= tlStart && i <= tlEnd ? ' selected' : '') +
+          (i === tlStart ? ' first' : '') +
+          (i === tlEnd   ? ' last'  : '');
+        el.dataset.idx = i;
+        // Label mois (tous) + année (jan ou premier)
+        const showYear = m.month === 0 || i === 0;
+        el.innerHTML = `<div class="timeline-tick">${showYear ? m.label+'<br><span style="color:var(--accent);font-weight:600">' + m.year + '</span>' : m.label}</div>`;
+        container.appendChild(el);
+      });
+      updateRangeLabel();
+      syncHiddenInputs();
+    }
+
+    function updateRangeLabel() {
+      const s = tlMonths[tlStart], e = tlMonths[tlEnd];
+      if (!s || !e) return;
+      const sLabel = `${MONTHS_FR[s.month]} ${s.year}`;
+      const eLabel = `${MONTHS_FR[e.month]} ${e.year}`;
+      document.getElementById('range-label').textContent =
+        tlStart === tlEnd ? sLabel : `${sLabel} → ${eLabel}`;
+    }
+
+    function syncHiddenInputs() {
+      if (!tlMonths.length) return;
+      document.getElementById('start-date').value = tlMonths[tlStart].key;
+      document.getElementById('end-date').value   = tlMonths[tlEnd].key;
+    }
+
+    // Drag logic
+    function idxFromEvent(e) {
+      const track = document.getElementById('timeline-months');
+      const rect  = track.getBoundingClientRect();
+      const x     = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+      return Math.max(0, Math.min(tlMonths.length - 1, Math.floor((x / rect.width) * tlMonths.length)));
+    }
+
+    document.getElementById('timeline-months').addEventListener('mousedown', e => {
+      const idx = idxFromEvent(e);
+      const distStart = Math.abs(idx - tlStart);
+      const distEnd   = Math.abs(idx - tlEnd);
+      if (distStart <= 1 && distStart <= distEnd) {
+        tlDragging = 'start';
+      } else if (distEnd <= 1) {
+        tlDragging = 'end';
+      } else if (idx >= tlStart && idx <= tlEnd) {
+        tlDragging = 'range';
+        tlDragStartX = e.clientX;
+        tlDragStartIdx = idx;
+      } else {
+        // Click hors sélection = nouveau point de départ
+        tlStart = tlEnd = idx;
+        tlDragging = 'end';
+        renderTimeline();
+      }
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', e => {
+      if (!tlDragging) return;
+      const idx = idxFromEvent(e);
+      if (tlDragging === 'start') {
+        tlStart = Math.min(idx, tlEnd);
+      } else if (tlDragging === 'end') {
+        tlEnd = Math.max(idx, tlStart);
+      } else if (tlDragging === 'range') {
+        const track = document.getElementById('timeline-months');
+        const rect  = track.getBoundingClientRect();
+        const delta = Math.round(((e.clientX - tlDragStartX) / rect.width) * tlMonths.length);
+        const span  = tlEnd - tlStart;
+        let ns = tlDragStartIdx - Math.floor(span/2) + delta;
+        ns = Math.max(0, Math.min(tlMonths.length - 1 - span, ns));
+        tlStart = ns; tlEnd = ns + span;
+        tlDragStartX = e.clientX;
+        tlDragStartIdx = idx;
+      }
+      renderTimeline();
+    });
+
+    document.addEventListener('mouseup', e => {
+      if (tlDragging) { tlDragging = null; loadData(); }
+    });
+
     // ── Main load function ────────────────────────────────────────────────
     async function loadData() {
       const monthStart = document.getElementById('start-date').value;
@@ -891,12 +1064,7 @@
 
     // Auto-load on start
     window.addEventListener('DOMContentLoaded', () => {
-      const today = new Date();
-      const m12 = new Date(today.getFullYear(), today.getMonth() - 12, 1);
-      const p6  = new Date(today.getFullYear(), today.getMonth() + 6,  1);
-      const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}`;
-      document.getElementById('start-date').value = fmt(m12);
-      document.getElementById('end-date').value   = fmt(p6);
+      buildTimeline();
       loadData();
     });
   </script>
