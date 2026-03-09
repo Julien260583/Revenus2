@@ -476,9 +476,10 @@
             <th>Voyageur</th>
             <th>Arrivée</th>
             <th>Départ</th>
-            <th>Nuits</th>
+            <th>Nuits (période)</th>
             <th>Source</th>
-            <th style="text-align:right">Montant</th>
+            <th style="text-align:right">Revenu total</th>
+            <th style="text-align:right">Prorata période</th>
           </tr>
         </thead>
         <tbody id="bookings-table"></tbody>
@@ -627,7 +628,7 @@
       document.getElementById('kpi-avg-trend').textContent      = 'par nuit dans la période';
     }
 
-    function renderTable(bookings, start, end) {
+    function renderTable(bookings) {
       const tbody = document.getElementById('bookings-table');
       tbody.innerHTML = '';
 
@@ -638,18 +639,21 @@
       };
 
       bookings.slice(0, 25).forEach(b => {
-        const p = prorataBooking(b, start, new Date(new Date(end).getTime() + 86400000));
-        const isPartial = p.nights !== b.nights;
+        const isPartial = b.prorataMaxNights !== b.nights;
         tbody.innerHTML += `
           <tr>
             <td><strong>${b.property}</strong></td>
             <td>${b.guest || '—'}</td>
             <td>${b.arrival}</td>
             <td>${b.departure}</td>
-            <td>${p.nights}${isPartial ? ` <span style="color:var(--muted);font-size:11px">(/${b.nights})</span>` : ''}</td>
+            <td>${b.prorataMaxNights} <span style="color:var(--muted);font-size:11px">/ ${b.nights}</span></td>
             <td style="color:var(--muted)">${sourceLabel(b.source)}</td>
+            <td style="text-align:right;color:var(--muted)">
+              ${b.totalAmount.toLocaleString('fr-FR', {style:'currency',currency:'EUR',maximumFractionDigits:0})}
+            </td>
             <td style="text-align:right;font-family:'DM Serif Display',serif;color:var(--accent)">
-              ${p.amount.toLocaleString('fr-FR', {style:'currency',currency:'EUR',maximumFractionDigits:0})}${isPartial ? ` <span style="color:var(--muted);font-size:11px">prorata</span>` : ''}
+              ${b.prorataAmount.toLocaleString('fr-FR', {style:'currency',currency:'EUR',maximumFractionDigits:0})}
+              ${isPartial ? '<span style="color:var(--muted);font-size:10px;display:block">prorata</span>' : ''}
             </td>
           </tr>`;
       });
@@ -728,6 +732,15 @@
       const srcFilter = document.getElementById('source-filter').value;
       if (srcFilter !== 'all') bookings = bookings.filter(b => b.source === srcFilter);
 
+      // Garder uniquement les réservations ayant des nuits dans la période + calcul prorata
+      const periodEnd1 = new Date(new Date(end).getTime() + 86400000);
+      bookings = bookings
+        .map(b => {
+          const p = prorataBooking(b, start, periodEnd1);
+          return { ...b, prorataAmount: p.amount, prorataMaxNights: p.nights };
+        })
+        .filter(b => b.prorataMaxNights > 0);
+
       // Show sections
       document.getElementById('kpi-grid').style.display   = 'grid';
       document.getElementById('charts-row').style.display = 'grid';
@@ -735,7 +748,7 @@
 
       renderKPIs(bookings, start, end);
       renderCharts(bookings, start, end);
-      renderTable(bookings, start, end);
+      renderTable(bookings);
 
       btn.disabled = false; btn.textContent = 'Analyser';
     }
