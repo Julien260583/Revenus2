@@ -1,6 +1,8 @@
 {
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/(.*)", "destination": "/public/$1" }
-  ]
+  "name": "lodgify-dashboard",
+  "version": "1.0.0",
+  "description": "Lodgify Revenue Dashboard — Vercel",
+  "scripts": {
+    "dev": "vercel dev"
+  }
 }
