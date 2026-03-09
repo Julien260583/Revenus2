@@ -465,6 +465,10 @@
         <div class="kpi-value" style="color:var(--accent3)" id="kpi-net">—</div>
         <div class="kpi-trend" id="kpi-net-trend"></div>
       </div>
+      <div class="kpi-card" style="grid-column: 1 / -1">
+        <div class="kpi-label">Taux d'occupation par logement</div>
+        <div id="kpi-occupancy" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:8px"></div>
+      </div>
     </div>
 
     <!-- Charts -->
@@ -692,6 +696,35 @@
       document.getElementById('kpi-nights-trend').textContent   = `moy. ${(nights/Math.max(1,bookings.length)).toFixed(1)} nuits/séjour`;
       document.getElementById('kpi-avg-trend').textContent      = 'par nuit dans la période';
       document.getElementById('kpi-net-trend').textContent      = `déductions : ${bookings.length} × 40€ prestation + 23% commission plateformes`;
+
+      // Taux d'occupation par logement
+      const periodDays = Math.round((new Date(end) - new Date(start)) / 86400000) + 1;
+      const propFilter = document.getElementById('property-filter').value;
+      const propsToShow = propFilter !== 'all'
+        ? { [propFilter]: PROPERTIES[propFilter] }
+        : PROPERTIES;
+
+      const nightsByProp = {};
+      bookings.forEach(b => {
+        const p = prorataBooking(b, start, periodEnd1);
+        nightsByProp[b.property_id] = (nightsByProp[b.property_id] || 0) + p.nights;
+      });
+
+      const occDiv = document.getElementById('kpi-occupancy');
+      occDiv.innerHTML = Object.entries(propsToShow).map(([id, name]) => {
+        const nights = nightsByProp[id] || 0;
+        const rate   = Math.min(100, Math.round((nights / periodDays) * 100));
+        const color  = rate >= 70 ? 'var(--accent3)' : rate >= 40 ? 'var(--accent)' : 'var(--muted)';
+        return `
+          <div>
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);font-weight:600;margin-bottom:6px">${name}</div>
+            <div style="font-family:'DM Serif Display',serif;font-size:28px;color:${color};line-height:1">${rate}%</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:4px">${nights} nuits / ${periodDays} jours</div>
+            <div style="margin-top:8px;height:4px;background:var(--border);border-radius:4px;overflow:hidden">
+              <div style="height:100%;width:${rate}%;background:${color};border-radius:4px;transition:width 0.5s ease"></div>
+            </div>
+          </div>`;
+      }).join('');
     }
 
     function renderTable(bookings) {
