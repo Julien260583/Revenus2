@@ -392,12 +392,12 @@
     <!-- Controls -->
     <div class="controls">
       <div class="field">
-        <label>Date de début</label>
-        <input type="date" id="start-date" value="2024-01-01"/>
+        <label>Mois de début</label>
+        <input type="month" id="start-date"/>
       </div>
       <div class="field">
-        <label>Date de fin</label>
-        <input type="date" id="end-date" value="2024-12-31"/>
+        <label>Mois de fin</label>
+        <input type="month" id="end-date"/>
       </div>
       <div class="field">
         <label>Source</label>
@@ -659,36 +659,39 @@
 
     // ── Main load function ────────────────────────────────────────────────
     async function loadData() {
-      const start = document.getElementById('start-date').value;
-      const end   = document.getElementById('end-date').value;
-      const btn   = document.getElementById('analyse-btn');
-      const errBanner = document.getElementById('error-banner');
+      const monthStart = document.getElementById('start-date').value;
+      const monthEnd   = document.getElementById('end-date').value;
+      const btn        = document.getElementById('analyse-btn');
+      const errBanner  = document.getElementById('error-banner');
 
-      if (!start || !end) { showError('Veuillez sélectionner une période.'); return; }
-      if (new Date(start) > new Date(end)) { showError('La date de début doit être avant la date de fin.'); return; }
+      if (!monthStart || !monthEnd) { showError('Veuillez sélectionner une période.'); return; }
+      if (monthStart > monthEnd) { showError('Le mois de début doit être avant le mois de fin.'); return; }
+
+      // Convertir YYYY-MM en premier/dernier jour du mois
+      const start = `${monthStart}-01`;
+      const [ey, em] = monthEnd.split('-').map(Number);
+      const end = `${monthEnd}-${String(new Date(ey, em, 0).getDate()).padStart(2,'0')}`;
 
       btn.disabled = true; btn.textContent = 'Chargement…';
       errBanner.classList.remove('visible');
 
       let data;
-      let isDemo = false;
 
       try {
-        // Try real API first (only works with LODGIFY_API_KEY on server)
         const res = await fetch(`/api/reservations?start=${start}&end=${end}`);
-        if (res.ok) {
-          data = await res.json();
-        } else {
-          throw new Error('API non disponible');
+        const json = await res.json();
+        if (!res.ok) {
+          showError(json.message || `Erreur ${res.status}`);
+          return;
         }
-      } catch (_) {
-        // Fallback to demo data
-        isDemo = true;
-        data = generateDemoData(start, end);
+        data = json;
+      } catch (err) {
+        showError(`Impossible de contacter l'API : ${err.message}`);
+        return;
       }
 
-      // Update demo badge
-      document.getElementById('demo-badge').style.display = isDemo ? 'inline-flex' : 'none';
+      // Masquer le badge démo
+      document.getElementById('demo-badge').style.display = 'none';
 
       // Normalize Lodgify v2 fields
       let bookings = (data.items || []).map(b => {
@@ -748,9 +751,9 @@
     // Auto-load on start
     window.addEventListener('DOMContentLoaded', () => {
       const today = new Date();
-      const janFirst = new Date(today.getFullYear(), 0, 1).toISOString().split('T')[0];
-      document.getElementById('start-date').value = janFirst;
-      document.getElementById('end-date').value   = today.toISOString().split('T')[0];
+      const year  = today.getFullYear();
+      document.getElementById('start-date').value = `${year}-01`;
+      document.getElementById('end-date').value   = `${year}-12`;
       loadData();
     });
   </script>
