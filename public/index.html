@@ -546,53 +546,81 @@
       const s = new Date(start), e = new Date(end);
       let cur = new Date(s.getFullYear(), s.getMonth(), 1);
       while (cur <= e) {
-        months[cur.toISOString().slice(0,7)] = 0;
+        months[cur.toISOString().slice(0,7)] = { revenue: 0, net: 0 };
         cur.setMonth(cur.getMonth() + 1);
       }
       Object.keys(months).forEach(key => {
         const [y, m] = key.split('-').map(Number);
         const mStart = new Date(y, m - 1, 1);
-        const mEnd   = new Date(y, m, 0); // dernier jour du mois
+        const mEnd   = new Date(y, m, 0);
         bookings.forEach(b => {
-          const { amount } = prorataBooking(b, mStart, new Date(mEnd.getTime() + 86400000));
-          months[key] += amount;
+          const { amount, nights } = prorataBooking(b, mStart, new Date(mEnd.getTime() + 86400000));
+          const ratio = b.nights > 0 ? nights / b.nights : 1;
+          months[key].revenue += amount;
+          months[key].net     += netRevenue(b) * ratio;
         });
       });
       return months;
     }
 
     function renderCharts(bookings, start, end) {
-      const monthly = buildMonthlyData(bookings, start, end);
-      const labels = Object.keys(monthly).map(k => {
+      const monthly       = buildMonthlyData(bookings, start, end);
+      const labels        = Object.keys(monthly).map(k => {
         const [y, m] = k.split('-');
         return new Date(y, m-1).toLocaleDateString('fr-FR', { month: 'short', year:'2-digit' });
       });
-      const values = Object.values(monthly);
+      const revenueValues = Object.values(monthly).map(v => Math.round(v.revenue));
+      const netValues     = Object.values(monthly).map(v => Math.round(v.net));
+      // Différence = commissions + frais (zone grisée entre revenue et net)
+      const deductValues  = revenueValues.map((r, i) => Math.round(r - netValues[i]));
 
-      // Revenue bar chart
+      // Revenue stacked bar chart
       if (revenueChart) revenueChart.destroy();
       revenueChart = new Chart(document.getElementById('revenueChart'), {
         type: 'bar',
         data: {
           labels,
-          datasets: [{
-            label: 'Revenus (€)',
-            data: values,
-            backgroundColor: 'rgba(232,194,122,0.25)',
-            borderColor: 'rgba(232,194,122,0.8)',
-            borderWidth: 1.5,
-            borderRadius: 6,
-          }]
+          datasets: [
+            {
+              label: 'Revenus nets',
+              data: netValues,
+              backgroundColor: 'rgba(122,232,184,0.5)',
+              borderColor: 'rgba(122,232,184,0.9)',
+              borderWidth: 1.5,
+              borderRadius: { topLeft: 0, topRight: 0, bottomLeft: 6, bottomRight: 6 },
+              stack: 'rev',
+            },
+            {
+              label: 'Commissions & frais',
+              data: deductValues,
+              backgroundColor: 'rgba(232,194,122,0.2)',
+              borderColor: 'rgba(232,194,122,0.5)',
+              borderWidth: 1.5,
+              borderRadius: { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 },
+              stack: 'rev',
+            }
+          ]
         },
         options: {
           ...chartDefaults,
           plugins: {
-            ...chartDefaults.plugins,
-            legend: { display: false }
+            legend: {
+              display: true,
+              position: 'top',
+              labels: { color: '#7a7f8e', font: { family:'DM Sans', size:11 }, boxWidth: 12, padding: 16 }
+            },
+            tooltip: {
+              callbacks: {
+                footer: (items) => {
+                  const total = items.reduce((a, i) => a + i.raw, 0);
+                  return `Total brut : ${total.toLocaleString('fr-FR')} €`;
+                }
+              }
+            }
           },
           scales: {
-            x: { ticks: { color: '#7a7f8e', font: { family:'DM Sans', size:11 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
-            y: { ticks: { color: '#7a7f8e', font: { family:'DM Sans', size:11 }, callback: v => v.toLocaleString('fr-FR') + ' €' }, grid: { color: 'rgba(255,255,255,0.04)' } }
+            x: { stacked: true, ticks: { color: '#7a7f8e', font: { family:'DM Sans', size:11 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+            y: { stacked: true, ticks: { color: '#7a7f8e', font: { family:'DM Sans', size:11 }, callback: v => v.toLocaleString('fr-FR') + ' €' }, grid: { color: 'rgba(255,255,255,0.04)' } }
           }
         }
       });
