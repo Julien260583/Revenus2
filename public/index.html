@@ -618,10 +618,6 @@
       ⚠️ <span id="error-msg"></span>
     </div>
 
-    <div id="error-banner">
-      ⚠️ <span id="error-msg"></span>
-    </div>
-
     <!-- KPIs row 1 : 4 métriques -->
     <div class="kpi-grid" id="kpi-grid" style="display:none">
       <div class="kpi-card gold">
@@ -693,7 +689,7 @@
         <div id="bookings-accordion"></div>
       </div>
     </div>
-
+  </div><!-- /.shell -->
 
   <script>
     // ── Property map ─────────────────────────────────────────────────────
@@ -950,71 +946,71 @@
         groups[b.property].push(b);
       });
 
-      // Sort properties by total desc
-      const sorted = Object.entries(groups).sort((a,b) =>
-        b[1].reduce((s,x) => s + x.prorataAmount, 0) - a[1].reduce((s,x) => s + x.prorataAmount, 0)
+      // Sort by total desc
+      const sorted = Object.entries(groups).sort((a, b) =>
+        b[1].reduce((s, x) => s + x.prorataAmount, 0) - a[1].reduce((s, x) => s + x.prorataAmount, 0)
       );
 
       sorted.forEach(([propName, items], i) => {
-        const propTotal  = items.reduce((s,b) => s + b.prorataAmount, 0);
-        const propNights = items.reduce((s,b) => s + b.prorataMaxNights, 0);
+        const propTotal  = items.reduce((s, b) => s + b.prorataAmount, 0);
+        const propNights = items.reduce((s, b) => s + b.prorataMaxNights, 0);
 
-        const div = document.createElement('div');
-        div.className = 'accordion-item' + (i === 0 ? ' open' : '');
-        div.innerHTML = \`
-          <div class="accordion-header" onclick="toggleAccordion(this)">
-            <div class="accordion-header-left">
-              <div class="accordion-prop">\${propName}</div>
-              <div class="accordion-meta">\${items.length} séjour\${items.length>1?'s':''} · \${propNights} nuits</div>
-            </div>
-            <div class="accordion-right">
-              <div class="accordion-amount">\${propTotal.toLocaleString('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0})}</div>
-              <div class="accordion-chevron">▼</div>
-            </div>
-          </div>
-          <div class="accordion-body">
-            <table>
-              <thead>
-                <tr>
-                  <th>Voyageur</th>
-                  <th>Arrivée</th>
-                  <th>Départ</th>
-                  <th>Nuits</th>
-                  <th>Source</th>
-                  <th style="text-align:right">Total brut</th>
-                  <th style="text-align:right">Prorata</th>
-                  <th style="text-align:right">Net</th>
-                </tr>
-              </thead>
-              <tbody>
-                \${items.map(b => {
-                  const ratio    = b.nights > 0 ? b.prorataMaxNights / b.nights : 1;
-                  const netP     = netRevenue(b) * ratio;
-                  const partial  = b.prorataMaxNights !== b.nights;
-                  return \`<tr>
-                    <td>\${b.guest || '—'}</td>
-                    <td>\${b.arrival}</td>
-                    <td>\${b.departure}</td>
-                    <td>\${b.prorataMaxNights}\${partial ? \` <span style="color:var(--muted);font-size:10px">/ \${b.nights}</span>\` : ''}</td>
-                    <td style="color:var(--muted)">\${sourceLabel(b.source)}</td>
-                    <td style="text-align:right;color:var(--muted)">\${b.totalAmount.toLocaleString('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0})}</td>
-                    <td style="text-align:right;color:var(--accent);font-family:'DM Serif Display',serif">\${b.prorataAmount.toLocaleString('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0})}\${partial?'<span style="color:var(--muted);font-size:10px;display:block">prorata</span>':''}</td>
-                    <td style="text-align:right;color:var(--accent3);font-family:'DM Serif Display',serif">\${netP.toLocaleString('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0})}</td>
-                  </tr>\`;
-                }).join('')}
-              </tbody>
-            </table>
-          </div>
-        \`;
-        container.appendChild(div);
+        const wrap = document.createElement('div');
+        wrap.className = 'accordion-item' + (i === 0 ? ' open' : '');
+
+        // Header
+        const header = document.createElement('div');
+        header.className = 'accordion-header';
+        header.innerHTML =
+          '<div class="accordion-header-left">' +
+            '<div class="accordion-prop">' + propName + '</div>' +
+            '<div class="accordion-meta">' + items.length + ' séjour' + (items.length > 1 ? 's' : '') + ' · ' + propNights + ' nuits</div>' +
+          '</div>' +
+          '<div class="accordion-right">' +
+            '<div class="accordion-amount">' + propTotal.toLocaleString('fr-FR', {style:'currency', currency:'EUR', maximumFractionDigits:0}) + '</div>' +
+            '<div class="accordion-chevron">▼</div>' +
+          '</div>';
+        header.addEventListener('click', () => wrap.classList.toggle('open'));
+
+        // Body
+        const body = document.createElement('div');
+        body.className = 'accordion-body';
+
+        let rows = '';
+        items.forEach(b => {
+          const ratio    = b.nights > 0 ? b.prorataMaxNights / b.nights : 1;
+          const netP     = netRevenue(b) * ratio;
+          const partial  = b.prorataMaxNights !== b.nights;
+          rows +=
+            '<tr>' +
+              '<td>' + (b.guest || '—') + '</td>' +
+              '<td>' + b.arrival + '</td>' +
+              '<td>' + b.departure + '</td>' +
+              '<td>' + b.prorataMaxNights + (partial ? ' <span style="color:var(--muted);font-size:10px">/ ' + b.nights + '</span>' : '') + '</td>' +
+              '<td style="color:var(--muted)">' + sourceLabel(b.source) + '</td>' +
+              '<td style="text-align:right;color:var(--muted)">' + b.totalAmount.toLocaleString('fr-FR', {style:'currency', currency:'EUR', maximumFractionDigits:0}) + '</td>' +
+              '<td style="text-align:right;color:var(--accent);font-family:\'DM Serif Display\',serif">' + b.prorataAmount.toLocaleString('fr-FR', {style:'currency', currency:'EUR', maximumFractionDigits:0}) + (partial ? '<span style="color:var(--muted);font-size:10px;display:block">prorata</span>' : '') + '</td>' +
+              '<td style="text-align:right;color:var(--accent3);font-family:\'DM Serif Display\',serif">' + netP.toLocaleString('fr-FR', {style:'currency', currency:'EUR', maximumFractionDigits:0}) + '</td>' +
+            '</tr>';
+        });
+
+        body.innerHTML =
+          '<table>' +
+            '<thead><tr>' +
+              '<th>Voyageur</th><th>Arrivée</th><th>Départ</th><th>Nuits</th><th>Source</th>' +
+              '<th style="text-align:right">Total brut</th>' +
+              '<th style="text-align:right">Prorata</th>' +
+              '<th style="text-align:right">Net</th>' +
+            '</tr></thead>' +
+            '<tbody>' + rows + '</tbody>' +
+          '</table>';
+
+        wrap.appendChild(header);
+        wrap.appendChild(body);
+        container.appendChild(wrap);
       });
 
-      // Badge count
       document.getElementById('tab-bookings-count').textContent = bookings.length;
-    }
-
-    function toggleAccordion(header) {
-      header.closest('.accordion-item').classList.toggle('open');
     }
 
 
