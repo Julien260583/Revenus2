@@ -4,6 +4,16 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
+  // Sécurité : autoriser uniquement les appels venant du cron Vercel
+  // ou les appels manuels authentifiés via CRON_SECRET
+  const authHeader = req.headers['authorization'];
+  const cronSecret = process.env.CRON_SECRET;
+  const isVercelCron = req.headers['x-vercel-cron'] === '1';
+
+  if (!isVercelCron && (!cronSecret || authHeader !== `Bearer ${cronSecret}`)) {
+    return res.status(401).json({ message: 'Non autorisé.' });
+  }
+
   const user        = process.env.MONGODB_USER;
   const password    = process.env.MONGODB_PASSWORD;
   const cluster     = process.env.MONGODB_CLUSTER;
