@@ -812,7 +812,7 @@
       btn.disabled = true;
 
       try {
-        const res  = await fetch('/api/sync');
+        const res  = await fetch('/api/sync-manual', { method: 'POST' });
         const data = await res.json();
         if (res.ok) {
           btn.textContent = `✓ ${data.upserted} màj`;
