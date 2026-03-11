@@ -397,12 +397,151 @@
       color: var(--accent2);
     }
 
+
+    /* ── Tabs ──────────────────────────────────────────────────────────── */
+    .tabs-wrap { margin-top: 0; }
+    .tabs-nav {
+      display: flex;
+      gap: 4px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 24px;
+    }
+    .tab-btn {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      padding: 10px 18px;
+      color: var(--muted);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .tab-badge {
+      background: rgba(232,194,122,0.15);
+      color: var(--accent);
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 100px;
+    }
+
+    /* ── Accordion logement ─────────────────────────────────────────────── */
+    .accordion-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+    .accordion-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s;
+    }
+    .accordion-header:hover { background: rgba(255,255,255,0.02); }
+    .accordion-header-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .accordion-prop {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--text);
+    }
+    .accordion-meta {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .accordion-right {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    .accordion-amount {
+      font-family: 'DM Serif Display', serif;
+      font-size: 18px;
+      color: var(--accent);
+    }
+    .accordion-chevron {
+      color: var(--muted);
+      font-size: 12px;
+      transition: transform 0.2s;
+    }
+    .accordion-item.open .accordion-chevron { transform: rotate(180deg); }
+    .accordion-body {
+      display: none;
+      border-top: 1px solid var(--border);
+    }
+    .accordion-item.open .accordion-body { display: block; }
+    .accordion-body table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .accordion-body thead th {
+      text-align: left;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: var(--muted);
+      font-weight: 600;
+      padding: 10px 16px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .accordion-body tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+    .accordion-body tbody tr:last-child { border-bottom: none; }
+    .accordion-body tbody tr:hover { background: rgba(255,255,255,0.02); }
+    .accordion-body tbody td { padding: 11px 16px; color: var(--text); }
+
+    /* Charts row (inside tab) */
+    .charts-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+    }
+    .chart-title {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      margin-bottom: 20px;
+    }
+
     @media (max-width: 1024px) {
-      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
       .charts-row { grid-template-columns: 1fr; }
     }
+
+    @media (max-width: 1024px) {
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    }
     @media (max-width: 640px) {
-      .controls { grid-template-columns: 1fr 1fr; }
       .kpi-grid { grid-template-columns: 1fr 1fr; }
     }
   </style>
@@ -478,7 +617,11 @@
       ⚠️ <span id="error-msg"></span>
     </div>
 
-    <!-- KPIs -->
+    <div id="error-banner">
+      ⚠️ <span id="error-msg"></span>
+    </div>
+
+    <!-- KPIs row 1 : 4 métriques -->
     <div class="kpi-grid" id="kpi-grid" style="display:none">
       <div class="kpi-card gold">
         <div class="kpi-label">Revenu Total</div>
@@ -500,58 +643,56 @@
         <div class="kpi-value gold" id="kpi-avg">—</div>
         <div class="kpi-trend" id="kpi-avg-trend"></div>
       </div>
-      <div class="kpi-card green" style="grid-column: 1 / -1">
-        <div class="kpi-label">Revenus Nets <span style="font-size:10px;font-weight:400;color:var(--muted)">− 40€ prestation − 23% commission plateforme</span></div>
+
+      <!-- Row 2 : nets + hors commission côte à côte -->
+      <div class="kpi-card green" style="grid-column: span 2">
+        <div class="kpi-label">Revenus Nets <span style="font-size:10px;font-weight:400;color:var(--muted)">− 40€ prestation − 23% commission</span></div>
         <div class="kpi-value" style="color:var(--accent3)" id="kpi-net">—</div>
         <div class="kpi-trend" id="kpi-net-trend"></div>
       </div>
-      <div class="kpi-card blue" style="grid-column: 1 / -1">
-        <div class="kpi-label">Revenus hors commission <span style="font-size:10px;font-weight:400;color:var(--muted)">− 23% Airbnb &amp; Booking uniquement</span></div>
+      <div class="kpi-card blue" style="grid-column: span 2">
+        <div class="kpi-label">Hors commission <span style="font-size:10px;font-weight:400;color:var(--muted)">− 23% Airbnb &amp; Booking</span></div>
         <div class="kpi-value" style="color:var(--accent2)" id="kpi-hc">—</div>
         <div class="kpi-trend" id="kpi-hc-trend"></div>
       </div>
+
+      <!-- Row 3 : occupation -->
       <div class="kpi-card" style="grid-column: 1 / -1">
         <div class="kpi-label">Taux d'occupation par logement</div>
         <div id="kpi-occupancy" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:8px"></div>
       </div>
     </div>
 
-    <!-- Charts -->
-    <div class="charts-row" id="charts-row" style="display:none">
-      <div class="chart-card">
-        <div class="chart-title">Revenus mensuels</div>
-        <canvas id="revenueChart" height="120"></canvas>
+    <!-- Tabs -->
+    <div class="tabs-wrap" id="tabs-wrap" style="display:none">
+      <div class="tabs-nav">
+        <button class="tab-btn active" onclick="switchTab('overview',this)">Vue d'ensemble</button>
+        <button class="tab-btn" onclick="switchTab('bookings',this)">
+          Réservations <span class="tab-badge" id="tab-bookings-count"></span>
+        </button>
       </div>
-      <div class="chart-card">
-        <div class="chart-title">Répartition par source</div>
-        <canvas id="sourceChart" height="240"></canvas>
+
+      <!-- Tab: Vue d'ensemble -->
+      <div class="tab-panel" id="tab-overview">
+        <div class="charts-row">
+          <div class="chart-card">
+            <div class="chart-title">Revenus mensuels</div>
+            <canvas id="revenueChart" height="120"></canvas>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">Répartition par source</div>
+            <canvas id="sourceChart" height="240"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Réservations -->
+      <div class="tab-panel" id="tab-bookings" style="display:none">
+        <!-- Accordion par logement -->
+        <div id="bookings-accordion"></div>
       </div>
     </div>
 
-    <!-- Table -->
-    <div class="table-card" id="table-card" style="display:none">
-      <div class="table-header">
-        <div class="chart-title" style="margin:0">Dernières réservations</div>
-        <span style="font-size:12px;color:var(--muted)" id="table-count"></span>
-      </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Hébergement</th>
-            <th>Voyageur</th>
-            <th>Arrivée</th>
-            <th>Départ</th>
-            <th>Nuits (période)</th>
-            <th>Source</th>
-            <th style="text-align:right">Revenu total</th>
-            <th style="text-align:right">Prorata période</th>
-            <th style="text-align:right">Net (prorata)</th>
-          </tr>
-        </thead>
-        <tbody id="bookings-table"></tbody>
-      </table>
-    </div>
-  </div>
 
   <script>
     // ── Property map ─────────────────────────────────────────────────────
@@ -782,9 +923,18 @@
       }).join('');
     }
 
-    function renderTable(bookings) {
-      const tbody = document.getElementById('bookings-table');
-      tbody.innerHTML = '';
+    // ── Tab switching ─────────────────────────────────────────────────────
+    function switchTab(tab, btn) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-overview').style.display = tab === 'overview' ? 'block' : 'none';
+      document.getElementById('tab-bookings').style.display = tab === 'bookings'  ? 'block' : 'none';
+    }
+
+    // ── Accordion render ───────────────────────────────────────────────────
+    function renderBookingsAccordion(bookings) {
+      const container = document.getElementById('bookings-accordion');
+      container.innerHTML = '';
 
       const sourceLabel = s => {
         if (s === 'AirbnbIntegration') return 'Airbnb';
@@ -792,33 +942,80 @@
         return s || 'Direct';
       };
 
-      bookings.slice(0, 25).forEach(b => {
-        const isPartial = b.prorataMaxNights !== b.nights;
-        const ratio     = b.nights > 0 ? b.prorataMaxNights / b.nights : 1;
-        const netTotal  = netRevenue(b);
-        const netProrata = netTotal * ratio;
-        tbody.innerHTML += `
-          <tr>
-            <td><strong>${b.property}</strong></td>
-            <td>${b.guest || '—'}</td>
-            <td>${b.arrival}</td>
-            <td>${b.departure}</td>
-            <td>${b.prorataMaxNights} <span style="color:var(--muted);font-size:11px">/ ${b.nights}</span></td>
-            <td style="color:var(--muted)">${sourceLabel(b.source)}</td>
-            <td style="text-align:right;color:var(--muted)">
-              ${b.totalAmount.toLocaleString('fr-FR', {style:'currency',currency:'EUR',maximumFractionDigits:0})}
-            </td>
-            <td style="text-align:right;font-family:'DM Serif Display',serif;color:var(--accent)">
-              ${b.prorataAmount.toLocaleString('fr-FR', {style:'currency',currency:'EUR',maximumFractionDigits:0})}
-              ${isPartial ? '<span style="color:var(--muted);font-size:10px;display:block">prorata</span>' : ''}
-            </td>
-            <td style="text-align:right;font-family:'DM Serif Display',serif;color:var(--accent3)">
-              ${netProrata.toLocaleString('fr-FR', {style:'currency',currency:'EUR',maximumFractionDigits:0})}
-            </td>
-          </tr>`;
+      // Group by property
+      const groups = {};
+      bookings.forEach(b => {
+        if (!groups[b.property]) groups[b.property] = [];
+        groups[b.property].push(b);
       });
-      document.getElementById('table-count').textContent = `${bookings.length} réservation${bookings.length>1?'s':''}`;
+
+      // Sort properties by total desc
+      const sorted = Object.entries(groups).sort((a,b) =>
+        b[1].reduce((s,x) => s + x.prorataAmount, 0) - a[1].reduce((s,x) => s + x.prorataAmount, 0)
+      );
+
+      sorted.forEach(([propName, items], i) => {
+        const propTotal  = items.reduce((s,b) => s + b.prorataAmount, 0);
+        const propNights = items.reduce((s,b) => s + b.prorataMaxNights, 0);
+
+        const div = document.createElement('div');
+        div.className = 'accordion-item' + (i === 0 ? ' open' : '');
+        div.innerHTML = \`
+          <div class="accordion-header" onclick="toggleAccordion(this)">
+            <div class="accordion-header-left">
+              <div class="accordion-prop">\${propName}</div>
+              <div class="accordion-meta">\${items.length} séjour\${items.length>1?'s':''} · \${propNights} nuits</div>
+            </div>
+            <div class="accordion-right">
+              <div class="accordion-amount">\${propTotal.toLocaleString('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0})}</div>
+              <div class="accordion-chevron">▼</div>
+            </div>
+          </div>
+          <div class="accordion-body">
+            <table>
+              <thead>
+                <tr>
+                  <th>Voyageur</th>
+                  <th>Arrivée</th>
+                  <th>Départ</th>
+                  <th>Nuits</th>
+                  <th>Source</th>
+                  <th style="text-align:right">Total brut</th>
+                  <th style="text-align:right">Prorata</th>
+                  <th style="text-align:right">Net</th>
+                </tr>
+              </thead>
+              <tbody>
+                \${items.map(b => {
+                  const ratio    = b.nights > 0 ? b.prorataMaxNights / b.nights : 1;
+                  const netP     = netRevenue(b) * ratio;
+                  const partial  = b.prorataMaxNights !== b.nights;
+                  return \`<tr>
+                    <td>\${b.guest || '—'}</td>
+                    <td>\${b.arrival}</td>
+                    <td>\${b.departure}</td>
+                    <td>\${b.prorataMaxNights}\${partial ? \` <span style="color:var(--muted);font-size:10px">/ \${b.nights}</span>\` : ''}</td>
+                    <td style="color:var(--muted)">\${sourceLabel(b.source)}</td>
+                    <td style="text-align:right;color:var(--muted)">\${b.totalAmount.toLocaleString('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0})}</td>
+                    <td style="text-align:right;color:var(--accent);font-family:'DM Serif Display',serif">\${b.prorataAmount.toLocaleString('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0})}\${partial?'<span style="color:var(--muted);font-size:10px;display:block">prorata</span>':''}</td>
+                    <td style="text-align:right;color:var(--accent3);font-family:'DM Serif Display',serif">\${netP.toLocaleString('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0})}</td>
+                  </tr>\`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        \`;
+        container.appendChild(div);
+      });
+
+      // Badge count
+      document.getElementById('tab-bookings-count').textContent = bookings.length;
     }
+
+    function toggleAccordion(header) {
+      header.closest('.accordion-item').classList.toggle('open');
+    }
+
 
     // ── Sync Lodgify → MongoDB ────────────────────────────────────────────
     async function syncData() {
@@ -1020,13 +1217,12 @@
         .filter(b => b.prorataMaxNights > 0);
 
       // Show sections
-      document.getElementById('kpi-grid').style.display   = 'grid';
-      document.getElementById('charts-row').style.display = 'grid';
-      document.getElementById('table-card').style.display = 'block';
+      document.getElementById('kpi-grid').style.display    = 'grid';
+      document.getElementById('tabs-wrap').style.display   = 'block';
 
       renderKPIs(bookings, start, end);
       renderCharts(bookings, start, end);
-      renderTable(bookings);
+      renderBookingsAccordion(bookings);
 
       btn.disabled = false; btn.textContent = 'Analyser';
     }
