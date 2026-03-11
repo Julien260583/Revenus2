@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Lodgify · Revenue Dashboard</title>
+  <title>MTH - Revenus</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <style>
@@ -505,6 +505,11 @@
         <div class="kpi-value" style="color:var(--accent3)" id="kpi-net">—</div>
         <div class="kpi-trend" id="kpi-net-trend"></div>
       </div>
+      <div class="kpi-card blue" style="grid-column: 1 / -1">
+        <div class="kpi-label">Revenus hors commission <span style="font-size:10px;font-weight:400;color:var(--muted)">− 23% Airbnb &amp; Booking uniquement</span></div>
+        <div class="kpi-value" style="color:var(--accent2)" id="kpi-hc">—</div>
+        <div class="kpi-trend" id="kpi-hc-trend"></div>
+      </div>
       <div class="kpi-card" style="grid-column: 1 / -1">
         <div class="kpi-label">Taux d'occupation par logement</div>
         <div id="kpi-occupancy" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:8px"></div>
@@ -708,11 +713,18 @@
       return Math.max(0, gross - fee - comm);
     }
 
+    function revenueHorsCommission(booking) {
+      const gross = booking.totalAmount || 0;
+      const comm  = PLATFORM_SOURCES.includes(booking.source) ? gross * COMMISSION : 0;
+      return Math.max(0, gross - comm);
+    }
+
     // ── Render UI ─────────────────────────────────────────────────────────
     function renderKPIs(bookings, start, end) {
       const periodEnd1 = new Date(new Date(end).getTime() + 86400000);
       let total = 0, nights = 0, net = 0;
 
+      let hc = 0;
       bookings.forEach(b => {
         const p     = prorataBooking(b, start, periodEnd1);
         const ratio = b.nights > 0 ? p.nights / b.nights : 1;
@@ -721,6 +733,7 @@
         // Net prorata : on applique le ratio de nuits aux déductions fixes aussi
         const bookingNet = netRevenue(b);
         net += bookingNet * ratio;
+        hc  += revenueHorsCommission(b) * ratio;
       });
 
       const avg = nights > 0 ? total / nights : 0;
@@ -730,12 +743,14 @@
       document.getElementById('kpi-nights').textContent   = nights;
       document.getElementById('kpi-avg').textContent      = avg.toLocaleString('fr-FR', { style:'currency', currency:'EUR', maximumFractionDigits:0 });
       document.getElementById('kpi-net').textContent      = net.toLocaleString('fr-FR', { style:'currency', currency:'EUR', maximumFractionDigits:0 });
+      document.getElementById('kpi-hc').textContent       = hc.toLocaleString('fr-FR', { style:'currency', currency:'EUR', maximumFractionDigits:0 });
 
       document.getElementById('kpi-revenue-trend').textContent  = 'Revenus au prorata de la période';
       document.getElementById('kpi-bookings-trend').textContent = 'réservations confirmées';
       document.getElementById('kpi-nights-trend').textContent   = `moy. ${(nights/Math.max(1,bookings.length)).toFixed(1)} nuits/séjour`;
       document.getElementById('kpi-avg-trend').textContent      = 'par nuit dans la période';
       document.getElementById('kpi-net-trend').textContent      = `déductions : ${bookings.length} × 40€ prestation + 23% commission plateformes`;
+      document.getElementById('kpi-hc-trend').textContent       = `${bookings.filter(b => ['AirbnbIntegration','BookingCom'].includes(b.source)).length} réservations plateforme × 23% commission déduite`;
 
       // Taux d'occupation par logement
       const periodDays = Math.round((new Date(end) - new Date(start)) / 86400000) + 1;
