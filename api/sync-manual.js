@@ -1,16 +1,17 @@
 const { runSync } = require('./_syncCore');
 
 /**
- * GET /api/sync
- * Réservé au cron Vercel (header x-vercel-cron: 1).
- * Ne pas appeler depuis le frontend.
+ * POST /api/sync-manual
+ * Appelé depuis le bouton "Synchroniser" du dashboard.
+ * Accessible sans authentification (dashboard interne).
  */
 module.exports = async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // Autoriser uniquement les appels du cron Vercel
-  if (req.headers['x-vercel-cron'] !== '1') {
-    return res.status(401).json({ message: 'Réservé au cron Vercel.' });
+  if (req.method !== 'POST') {
+    return res.status(405).json({ message: 'Méthode non autorisée.' });
   }
 
   try {
