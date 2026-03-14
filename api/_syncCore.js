@@ -4,12 +4,17 @@ const { MongoClient } = require('mongodb');
  * Logique de synchronisation Lodgify → MongoDB.
  * Appelée depuis /api/sync (cron) et /api/sync-manual (bouton UI).
  *
- * WORKAROUND BUG LODGIFY : l'API /v2/reservations/bookings omet parfois
- * les réservations les plus récentes dans la liste paginée (index non mis
- * à jour en temps réel). On effectue donc un second passage en récupérant
- * chaque réservation individuellement via son ID pour les bookings créés
- * ou modifiés dans les 14 derniers jours.
+ * BUG LODGIFY CONFIRMÉ : l'API /v2/reservations/bookings omet certaines
+ * réservations de sa liste paginée (invisible même avec updatedSince,
+ * même sans filtre de date). Seul l'appel direct par ID fonctionne.
+ *
+ * STRATÉGIE : Gap detection
+ * 1. Récupérer toute la liste paginée → collecter les IDs
+ * 2. Identifier la plage d'IDs à scanner (autour du max connu)
+ * 3. Fetcher directement par ID tous les IDs absents de la liste
+ * 4. Upsert tout en MongoDB
  */
+
 async function fetchAllPages(lodgifyKey, fromDate, toDate, size) {
   const items = [];
   let page = 1;
@@ -35,22 +40,45 @@ async function fetchAllPages(lodgifyKey, fromDate, toDate, size) {
   return { items, total };
 }
 
-async function fetchRecentByIds(lodgifyKey, knownIds) {
-  // Cherche les réservations récentes via l'endpoint sans filtre de date,
-  // triées par création décroissante — récupère les 50 plus récentes
-  // et retourne celles qui ne sont pas déjà dans knownIds.
-  const url = `https://api.lodgify.com/v2/reservations/bookings?includeCount=true&size=50&page=1`;
-  const response = await fetch(url, {
-    headers: { 'X-ApiKey': lodgifyKey, 'Accept': 'application/json' }
-  });
-  if (!response.ok) return [];
+/**
+ * Fetch direct d'une réservation par ID.
+ * Retourne l'objet ou null si 404/erreur.
+ */
+async function fetchById(lodgifyKey, id) {
+  try {
+    const response = await fetch(
+      `https://api.lodgify.com/v2/reservations/bookings/${id}`,
+      { headers: { 'X-ApiKey': lodgifyKey, 'Accept': 'application/json' } }
+    );
+    if (response.status === 404) return null;
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
 
-  const data = await response.json();
-  const all = data.items || [];
+/**
+ * Gap detection : scanne les IDs entre minId et maxId
+ * qui ne sont pas dans knownIds, en les fetchant un par un.
+ * Limité à 300 IDs max pour tenir dans le timeout Vercel (10s).
+ */
+async function detectGaps(lodgifyKey, knownIds, minId, maxId) {
+  const found = [];
+  const limit = 300;
+  let checked = 0;
 
-  // Garde uniquement celles absentes du premier passage
-  const missing = all.filter(b => !knownIds.has(b.id));
-  return missing;
+  for (let id = minId; id <= maxId && checked < limit; id++) {
+    if (!knownIds.has(id)) {
+      const booking = await fetchById(lodgifyKey, id);
+      if (booking && booking.id) {
+        found.push(booking);
+      }
+      checked++;
+    }
+  }
+
+  return found;
 }
 
 async function runSync() {
@@ -76,19 +104,27 @@ async function runSync() {
     const fromDate = '2020-01-01';
     const toDate   = new Date(new Date().setMonth(new Date().getMonth() + 12))
                        .toISOString().split('T')[0];
-    const size = 200;
 
     // --- Passage 1 : liste paginée standard ---
-    const { items: mainItems, total } = await fetchAllPages(lodgifyKey, fromDate, toDate, size);
+    const { items: mainItems, total } = await fetchAllPages(lodgifyKey, fromDate, toDate, 200);
     const knownIds = new Set(mainItems.map(b => b.id));
+    const maxIdInList = mainItems.length > 0 ? Math.max(...mainItems.map(b => b.id)) : 0;
 
-    // --- Passage 2 : workaround bug Lodgify ---
-    // Récupère les 50 réservations les plus récentes (sans filtre date)
-    // pour capturer celles omises dans la pagination principale.
-    const recentMissing = await fetchRecentByIds(lodgifyKey, knownIds);
+    // --- Passage 2 : Gap detection ---
+    // Récupère le plus grand ID déjà en base pour borner la recherche
+    const lastInDb = await col.findOne({}, { sort: { id: -1 }, projection: { id: 1 } });
+    const maxIdInDb = lastInDb ? lastInDb.id : 0;
 
-    const allItems = [...mainItems, ...recentMissing];
+    // Scanne les IDs entre (max - 25000) et (max + 2000)
+    // La plage est volontairement resserrée pour tenir dans le timeout Vercel
+    const searchMin = Math.max(maxIdInList, maxIdInDb) - 25000;
+    const searchMax = Math.max(maxIdInList, maxIdInDb) + 2000;
 
+    const gapItems = await detectGaps(lodgifyKey, knownIds, searchMin, searchMax);
+
+    const allItems = [...mainItems, ...gapItems];
+
+    // --- Upsert tout en MongoDB ---
     let upserted = 0;
     if (allItems.length > 0) {
       const ops = allItems.map(b => ({
@@ -105,9 +141,10 @@ async function runSync() {
     return {
       total,
       upserted,
-      mainCount: mainItems.length,
-      recoveredByWorkaround: recentMissing.length,
-      recoveredIds: recentMissing.map(b => b.id)
+      mainCount:   mainItems.length,
+      gapFound:    gapItems.length,
+      gapIds:      gapItems.map(b => b.id),
+      searchRange: `${searchMin} → ${searchMax}`,
     };
 
   } finally {
