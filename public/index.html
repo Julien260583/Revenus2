@@ -667,6 +667,9 @@
         <button class="tab-btn" onclick="switchTab('bookings',this)">
           Réservations <span class="tab-badge" id="tab-bookings-count"></span>
         </button>
+        <button class="tab-btn" onclick="switchTab('debug',this)" style="color:#e8c27a;border-bottom:2px solid transparent">
+          🔍 Debug <span class="tab-badge" id="tab-debug-count" style="background:rgba(232,194,122,0.2);color:#e8c27a"></span>
+        </button>
       </div>
 
       <!-- Tab: Vue d'ensemble -->
@@ -688,6 +691,53 @@
         <!-- Accordion par logement -->
         <div id="bookings-accordion"></div>
       </div>
+
+      <!-- Tab: Debug -->
+      <div class="tab-panel" id="tab-debug" style="display:none">
+        <div style="padding:16px 0">
+          <div style="background:rgba(232,194,122,0.08);border:1px solid rgba(232,194,122,0.25);border-radius:10px;padding:16px;margin-bottom:20px;font-size:12px;color:var(--muted);line-height:1.7">
+            <strong style="color:#e8c27a">⚠️ Vue diagnostic</strong> — Toutes les réservations brutes retournées par l'API, <strong>avant tout filtrage</strong> (statut, source, propriété, période prorata).
+            Utile pour identifier pourquoi une réservation n'apparaît pas dans le dashboard.
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+            <input id="debug-search" type="text" placeholder="Rechercher par nom, source, statut, propriété…"
+              oninput="renderDebugTable()"
+              style="flex:1;min-width:200px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+            <select id="debug-status-filter" onchange="renderDebugTable()"
+              style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px">
+              <option value="all">Tous statuts</option>
+              <option value="confirmed">confirmed</option>
+              <option value="pending">pending</option>
+              <option value="cancelled">cancelled</option>
+            </select>
+            <button onclick="exportDebugCSV()"
+              style="background:transparent;border:1px solid var(--border);border-radius:8px;padding:8px 14px;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer;white-space:nowrap">
+              ↓ Export CSV
+            </button>
+          </div>
+          <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border)">
+            <table id="debug-table" style="width:100%;border-collapse:collapse;font-size:12px">
+              <thead>
+                <tr style="background:var(--surface2);color:var(--muted);text-transform:uppercase;font-size:11px;letter-spacing:.5px">
+                  <th style="padding:10px 12px;text-align:left;white-space:nowrap">ID</th>
+                  <th style="padding:10px 12px;text-align:left;white-space:nowrap">Propriété</th>
+                  <th style="padding:10px 12px;text-align:left;white-space:nowrap">Client</th>
+                  <th style="padding:10px 12px;text-align:left;white-space:nowrap">Arrivée</th>
+                  <th style="padding:10px 12px;text-align:left;white-space:nowrap">Départ</th>
+                  <th style="padding:10px 12px;text-align:left;white-space:nowrap">Source brute</th>
+                  <th style="padding:10px 12px;text-align:left;white-space:nowrap">Statut brut</th>
+                  <th style="padding:10px 12px;text-align:left;white-space:nowrap">Statut normalisé</th>
+                  <th style="padding:10px 12px;text-align:right;white-space:nowrap">Montant</th>
+                  <th style="padding:10px 12px;text-align:left;white-space:nowrap">Syncé le</th>
+                  <th style="padding:10px 12px;text-align:left;white-space:nowrap">⚠️ Exclusion</th>
+                </tr>
+              </thead>
+              <tbody id="debug-tbody"></tbody>
+            </table>
+          </div>
+          <div id="debug-empty" style="display:none;text-align:center;padding:40px;color:var(--muted);font-size:13px">Aucune réservation trouvée pour ces critères.</div>
+        </div>
+      </div>
     </div>
   </div><!-- /.shell -->
 
@@ -699,7 +749,88 @@
       550914: 'Naturel',
       550915: 'Spa',
     };
-    // ── Charts ────────────────────────────────────────────────────────────
+    // ── Debug raw data store ──────────────────────────────────────────────
+    let _rawBookings = [];
+
+    function renderDebugTable() {
+      const search = (document.getElementById('debug-search').value || '').toLowerCase();
+      const statusF = document.getElementById('debug-status-filter').value;
+
+      let rows = _rawBookings;
+      if (search) rows = rows.filter(r =>
+        (r._guest||'').toLowerCase().includes(search) ||
+        (r._rawSource||'').toLowerCase().includes(search) ||
+        (r._rawStatus||'').toLowerCase().includes(search) ||
+        (r._property||'').toLowerCase().includes(search) ||
+        String(r.id||'').includes(search)
+      );
+      if (statusF !== 'all') rows = rows.filter(r => r._normStatus === statusF);
+
+      document.getElementById('tab-debug-count').textContent = rows.length;
+      const tbody = document.getElementById('debug-tbody');
+      const empty = document.getElementById('debug-empty');
+
+      if (rows.length === 0) {
+        tbody.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+      }
+      empty.style.display = 'none';
+
+      const statusColor = s => s === 'confirmed' ? '#7ae8b8' : s === 'pending' ? '#e8c27a' : '#e87a7a';
+      const exclusionReasons = r => {
+        const reasons = [];
+        if (r._normStatus !== 'confirmed') reasons.push(`statut="${r._normStatus}"`);
+        if (!PROPERTIES[r.property_id]) reasons.push(`property_id #${r.property_id} inconnu`);
+        if (!r._rawSource) reasons.push('source vide');
+        return reasons.length ? reasons.join(', ') : '—';
+      };
+
+      tbody.innerHTML = rows.map((r, i) => {
+        const excl = exclusionReasons(r);
+        const rowBg = i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)';
+        const exclColor = excl !== '—' ? '#e87a7a' : 'var(--muted)';
+        return `<tr style="background:${rowBg};border-top:1px solid var(--border)">
+          <td style="padding:9px 12px;color:var(--muted);font-size:11px">${r.id||'—'}</td>
+          <td style="padding:9px 12px">${r._property}</td>
+          <td style="padding:9px 12px">${r._guest}</td>
+          <td style="padding:9px 12px;white-space:nowrap">${r.arrival||'—'}</td>
+          <td style="padding:9px 12px;white-space:nowrap">${r.departure||'—'}</td>
+          <td style="padding:9px 12px;font-family:monospace;font-size:11px;color:#e8c27a">${r._rawSource||'<em style="color:var(--muted)">null</em>'}</td>
+          <td style="padding:9px 12px;font-family:monospace;font-size:11px;color:#a0a8b8">${r._rawStatus||'<em style="color:var(--muted)">null</em>'}</td>
+          <td style="padding:9px 12px"><span style="background:${statusColor(r._normStatus)}22;color:${statusColor(r._normStatus)};padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600">${r._normStatus}</span></td>
+          <td style="padding:9px 12px;text-align:right">${r._amount ? r._amount.toFixed(2)+' €' : '—'}</td>
+          <td style="padding:9px 12px;font-size:11px;color:var(--muted);white-space:nowrap">${r._syncedAt ? new Date(r._syncedAt).toLocaleString('fr-FR') : '—'}</td>
+          <td style="padding:9px 12px;font-size:11px;color:${exclColor}">${excl}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function exportDebugCSV() {
+      const headers = ['ID','Propriété','Client','Arrivée','Départ','Source brute','Statut brut','Statut normalisé','Montant','Syncé le','Exclusion'];
+      const statusF = document.getElementById('debug-status-filter').value;
+      const search  = (document.getElementById('debug-search').value || '').toLowerCase();
+      let rows = _rawBookings;
+      if (search) rows = rows.filter(r => (r._guest||'').toLowerCase().includes(search) || (r._rawSource||'').toLowerCase().includes(search));
+      if (statusF !== 'all') rows = rows.filter(r => r._normStatus === statusF);
+      const exclFn = r => {
+        const rs = [];
+        if (r._normStatus !== 'confirmed') rs.push(`statut="${r._normStatus}"`);
+        if (!PROPERTIES[r.property_id]) rs.push(`property_id inconnu`);
+        return rs.join(', ') || '—';
+      };
+      const csv = [headers, ...rows.map(r => [
+        r.id, r._property, r._guest, r.arrival, r.departure,
+        r._rawSource, r._rawStatus, r._normStatus,
+        r._amount?.toFixed(2) || '', r._syncedAt ? new Date(r._syncedAt).toLocaleString('fr-FR') : '', exclFn(r)
+      ])].map(r => r.map(v => `"${String(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'}));
+      a.download = `debug_reservations_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+    }
+
+
     let revenueChart, sourceChart;
 
     const chartDefaults = {
@@ -926,6 +1057,7 @@
       btn.classList.add('active');
       document.getElementById('tab-overview').style.display = tab === 'overview' ? 'block' : 'none';
       document.getElementById('tab-bookings').style.display = tab === 'bookings'  ? 'block' : 'none';
+      document.getElementById('tab-debug').style.display    = tab === 'debug'     ? 'block' : 'none';
     }
 
     // ── Accordion render ───────────────────────────────────────────────────
@@ -1168,6 +1300,9 @@
       // Masquer le badge démo
       document.getElementById('demo-badge').style.display = 'none';
 
+      // Reset debug store
+      _rawBookings = [];
+
       // Normalize Lodgify v2 fields
       let bookings = (data.items || []).map(b => {
         const nights = Math.round((new Date(b.departure) - new Date(b.arrival)) / 86400000);
@@ -1179,6 +1314,18 @@
         if (['Booked', 'CheckedIn', 'CheckedOut', 'Agreed'].includes(rawStatus)) status = 'confirmed';
         else if (['Tentative', 'Enquiry'].includes(rawStatus)) status = 'pending';
         else status = 'cancelled'; // Declined, CancelledByGuest, etc.
+
+        // Store for debug BEFORE any filter
+        _rawBookings.push({
+          ...b,
+          _rawSource:  b.source || null,
+          _rawStatus:  rawStatus || null,
+          _normStatus: status,
+          _guest:      b.guest?.name || '—',
+          _property:   PROPERTIES[b.property_id] || `Propriété #${b.property_id}`,
+          _amount:     b.total_amount || 0,
+          _syncedAt:   b._syncedAt || null,
+        });
 
         return {
           property_id: b.property_id,
@@ -1220,6 +1367,7 @@
       renderKPIs(bookings, start, end);
       renderCharts(bookings, start, end);
       renderBookingsAccordion(bookings);
+      renderDebugTable();
 
       btn.disabled = false; btn.textContent = 'Analyser';
     }
