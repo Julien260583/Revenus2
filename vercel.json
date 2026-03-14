@@ -4,5 +4,13 @@
       "path": "/api/sync",
       "schedule": "0 6 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "api/sync.js": {
+      "maxDuration": 300
+    },
+    "api/sync-manual.js": {
+      "maxDuration": 300
+    }
+  }
 }
