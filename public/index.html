@@ -557,13 +557,28 @@
         <img src="/logo.png" alt="My Toul'House" style="height:44px; width:auto; object-fit:contain;"/>
       </div>
       <div style="display:flex;align-items:center;gap:12px">
+        <!-- Indicateur cron -->
+        <div id="cron-status" style="
+          display:none;
+          align-items:center;gap:8px;
+          background:var(--surface);
+          border:1px solid var(--border);
+          border-radius:8px;
+          padding:6px 12px;
+          font-size:11px;
+          color:var(--muted);
+          font-family:'DM Sans',sans-serif;
+        ">
+          <span id="cron-dot" style="width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;display:inline-block"></span>
+          <span id="cron-label">Cron : —</span>
+        </div>
         <button onclick="syncData()" id="sync-btn" style="
           background:transparent;border:1px solid var(--border);border-radius:8px;
           padding:8px 16px;color:var(--muted);font-family:'DM Sans',sans-serif;
           font-size:12px;font-weight:600;cursor:pointer;letter-spacing:1px;
           text-transform:uppercase;transition:all 0.2s;
         " onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
-           onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
+           onmouseout="if(!this.disabled){this.style.borderColor='var(--border)';this.style.color='var(--muted)'}">
           ↻ Synchroniser
         </button>
         <div id="demo-badge" class="demo-badge" style="display:none">
@@ -1149,24 +1164,107 @@
     // ── Sync Lodgify → MongoDB ────────────────────────────────────────────
     async function syncData() {
       const btn = document.getElementById('sync-btn');
-      btn.textContent = '↻ Sync en cours…';
+      const originalText = '↻ Synchroniser';
+      btn.textContent = '↻ Sync…';
       btn.disabled = true;
+      btn.style.opacity = '0.6';
 
       try {
-        const res  = await fetch('/api/sync-manual', { method: 'POST' });
-        const data = await res.json();
+        const res = await fetch('/api/sync-manual', { method: 'POST' });
+        let data;
+        try { data = await res.json(); } catch(_) { data = {}; }
+
         if (res.ok) {
-          btn.textContent = `✓ ${data.upserted} màj`;
-          setTimeout(() => { btn.textContent = '↻ Synchroniser'; btn.disabled = false; }, 3000);
-          loadData();
+          btn.textContent = `✓ ${data.upserted ?? '?'} màj`;
+          btn.style.borderColor = 'var(--accent3)';
+          btn.style.color = 'var(--accent3)';
+          await loadCronStatus();
+          await loadData();
+          setTimeout(() => {
+            btn.textContent = originalText;
+            btn.style.borderColor = '';
+            btn.style.color = '';
+            btn.style.opacity = '';
+            btn.disabled = false;
+          }, 3000);
         } else {
           btn.textContent = '✗ Erreur';
+          btn.style.borderColor = 'var(--danger)';
+          btn.style.color = 'var(--danger)';
+          btn.style.opacity = '';
           btn.disabled = false;
-          alert(data.message);
+          const msg = data.message || `Erreur HTTP ${res.status}`;
+          showError(`Sync échouée : ${msg}`);
+          setTimeout(() => {
+            btn.textContent = originalText;
+            btn.style.borderColor = '';
+            btn.style.color = '';
+          }, 4000);
         }
       } catch (err) {
-        btn.textContent = '✗ Erreur';
+        btn.textContent = '✗ Réseau';
+        btn.style.borderColor = 'var(--danger)';
+        btn.style.color = 'var(--danger)';
+        btn.style.opacity = '';
         btn.disabled = false;
+        showError(`Impossible de contacter /api/sync-manual : ${err.message}`);
+        setTimeout(() => {
+          btn.textContent = originalText;
+          btn.style.borderColor = '';
+          btn.style.color = '';
+        }, 4000);
+      }
+    }
+
+    // ── Cron status indicator ─────────────────────────────────────────────
+    async function loadCronStatus() {
+      try {
+        const res = await fetch('/api/sync-status');
+        if (!res.ok) return;
+        const { last, lastCron } = await res.json();
+
+        const wrap  = document.getElementById('cron-status');
+        const dot   = document.getElementById('cron-dot');
+        const label = document.getElementById('cron-label');
+
+        if (!last) {
+          wrap.style.display = 'flex';
+          dot.style.background = 'var(--muted)';
+          label.textContent = 'Jamais synchronisé';
+          return;
+        }
+
+        const ago = (date) => {
+          const diff = Math.floor((Date.now() - new Date(date)) / 1000);
+          if (diff < 60)     return 'à l\'instant';
+          if (diff < 3600)   return `il y a ${Math.floor(diff/60)} min`;
+          if (diff < 86400)  return `il y a ${Math.floor(diff/3600)} h`;
+          return `il y a ${Math.floor(diff/86400)} j`;
+        };
+
+        // Cron OK si executé dans les dernières 26h (marge pour le daily 6h)
+        const cronAge = lastCron
+          ? (Date.now() - new Date(lastCron.executedAt)) / 1000
+          : Infinity;
+        const cronOk = cronAge < 26 * 3600;
+
+        dot.style.background  = cronOk ? 'var(--accent3)' : 'var(--accent)';
+        dot.title = cronOk ? 'Cron quotidien OK' : 'Cron non exécuté depuis >24h';
+        wrap.style.display = 'flex';
+
+        const cronPart = lastCron
+          ? `Cron : ${ago(lastCron.executedAt)}`
+          : 'Cron : jamais';
+        const manualPart = last.source !== 'cron'
+          ? ` · Manuel : ${ago(last.executedAt)}`
+          : '';
+
+        label.textContent = cronPart + manualPart;
+        label.title = lastCron
+          ? `Dernière exéc. cron : ${new Date(lastCron.executedAt).toLocaleString('fr-FR')} — ${lastCron.upserted ?? 0} màj`
+          : 'Aucune exécution cron enregistrée';
+      } catch (_) {
+        // Silencieux si l'endpoint n'existe pas encore
       }
     }
 
@@ -1382,6 +1480,7 @@
     // Auto-load on start
     window.addEventListener('DOMContentLoaded', () => {
       initPicker();
+      loadCronStatus();
       loadData();
     });
   </script>
