@@ -15,7 +15,7 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const result = await runSync();
+    const result = await runSync('manual');
     return res.status(200).json({
       message: 'Sync terminée',
       total:    result.total,

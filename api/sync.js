@@ -14,7 +14,7 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const { total, upserted } = await runSync();
+    const { total, upserted } = await runSync('cron');
     return res.status(200).json({ message: 'Sync terminée', total, upserted });
   } catch (err) {
     return res.status(500).json({ message: err.message });

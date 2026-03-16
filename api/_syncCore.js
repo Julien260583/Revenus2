@@ -81,7 +81,7 @@ async function detectGaps(lodgifyKey, knownIds, minId, maxId) {
   return found;
 }
 
-async function runSync() {
+async function runSync(source = 'manual') {
   const user       = process.env.MONGODB_USER;
   const password   = process.env.MONGODB_PASSWORD;
   const cluster    = process.env.MONGODB_CLUSTER;
@@ -138,7 +138,7 @@ async function runSync() {
       upserted = result.upsertedCount + result.modifiedCount;
     }
 
-    return {
+    const result = {
       total,
       upserted,
       mainCount:   mainItems.length,
@@ -146,6 +146,21 @@ async function runSync() {
       gapIds:      gapItems.map(b => b.id),
       searchRange: `${searchMin} → ${searchMax}`,
     };
+
+    // Écriture du log de synchronisation
+    try {
+      const logs = client.db('lodgify').collection('sync_logs');
+      await logs.insertOne({
+        executedAt: new Date(),
+        source,
+        ...result,
+        success: true,
+      });
+    } catch (_) {
+      // Ne pas bloquer si l'écriture du log échoue
+    }
+
+    return result;
 
   } finally {
     await client.close();
