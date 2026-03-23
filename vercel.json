@@ -7,10 +7,10 @@
   ],
   "functions": {
     "api/sync.js": {
-      "maxDuration": 300
+      "maxDuration": 10
     },
     "api/sync-manual.js": {
-      "maxDuration": 300
+      "maxDuration": 10
     }
   }
 }
