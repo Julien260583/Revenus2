@@ -45,8 +45,8 @@ async function fetchById(lodgifyKey, id) {
 }
 
 /**
- * Gap detection parallélisée par lots.
- * FIX : fenêtre réduite à +50 (était +500) pour éviter les timeouts.
+ * Gap detection — désactivée par défaut sur le cron (trop lente pour 10s).
+ * Activée uniquement en mode 'manual' via le bouton du dashboard.
  */
 async function detectGaps(lodgifyKey, knownIds, minId, maxId, concurrency = 10) {
   const idsToCheck = [];
@@ -94,7 +94,7 @@ async function runSync(source = 'manual') {
   const uri = `mongodb+srv://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${cluster}/lodgify?appName=revenus`;
   const client = new MongoClient(uri);
 
-  let result = null;
+  let result    = null;
   let syncError = null;
 
   try {
@@ -110,15 +110,19 @@ async function runSync(source = 'manual') {
     const knownIds    = new Set(mainItems.map(b => b.id));
     const maxIdInList = mainItems.length > 0 ? Math.max(...mainItems.map(b => b.id)) : 0;
 
-    // --- Passage 2 : Gap detection (fenêtre réduite) ---
-    const lastInDb  = await col.findOne({}, { sort: { id: -1 }, projection: { id: 1 } });
-    const maxIdInDb = lastInDb ? lastInDb.id : 0;
-
-    const gapMin   = maxIdInDb + 1;
-    const gapMax   = Math.max(maxIdInList, maxIdInDb) + 50; // FIX: était +500
-    const gapItems = (gapMin <= gapMax)
-      ? await detectGaps(lodgifyKey, knownIds, gapMin, gapMax)
-      : [];
+    // --- Passage 2 : Gap detection ---
+    // Désactivée pour le cron (budget 10s sur Hobby).
+    // Activée uniquement en manuel pour récupérer les réservations hors plage.
+    let gapItems = [];
+    if (source === 'manual') {
+      const lastInDb  = await col.findOne({}, { sort: { id: -1 }, projection: { id: 1 } });
+      const maxIdInDb = lastInDb ? lastInDb.id : 0;
+      const gapMin    = maxIdInDb + 1;
+      const gapMax    = Math.max(maxIdInList, maxIdInDb) + 50;
+      if (gapMin <= gapMax) {
+        gapItems = await detectGaps(lodgifyKey, knownIds, gapMin, gapMax);
+      }
+    }
 
     const allItems = [...mainItems, ...gapItems];
 
@@ -165,14 +169,12 @@ async function runSync(source = 'manual') {
 
     result = {
       total,
-      fetched:   allItems.length,
-      changed:   ops.length,
+      fetched:               allItems.length,
+      changed:               ops.length,
       upserted,
-      mainCount: mainItems.length,
-      gapFound:  gapItems.length,
-      gapIds:    gapItems.map(b => b.id),
-      gapRange:  gapItems.length > 0 ? `${gapMin} → ${gapMax}` : 'aucun scan',
-      // FIX : champs manquants retournés par sync-manual
+      mainCount:             mainItems.length,
+      gapFound:              gapItems.length,
+      gapIds:                gapItems.map(b => b.id),
       recoveredByWorkaround: gapItems.length,
       recoveredIds:          gapItems.map(b => b.id),
     };
@@ -181,7 +183,7 @@ async function runSync(source = 'manual') {
     syncError = err;
   }
 
-  // FIX : log systématique, même en cas d'erreur
+  // Log systématique, même en cas d'erreur
   try {
     const logs = client.db('lodgify').collection('sync_logs');
     await logs.insertOne(
