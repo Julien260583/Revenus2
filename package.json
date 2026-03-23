@@ -3,6 +3,6 @@
   "version": "1.0.0",
   "description": "Lodgify Revenue Dashboard — Vercel + MongoDB",
   "dependencies": {
-    "mongodb": "^6.3.0"
+    "mongodb": "^6.14.0"
   }
 }
