@@ -128,7 +128,7 @@ async function runSync(source = 'manual') {
     const maxIdInDb = lastInDb ? lastInDb.id : 0;
 
     const gapMin   = maxIdInDb + 1;
-    const gapMax   = Math.max(maxIdInList, maxIdInDb) + 500;
+    const gapMax   = Math.max(maxIdInList, maxIdInDb) + 50;
     const gapItems = (gapMin <= gapMax)
       ? await detectGaps(lodgifyKey, knownIds, gapMin, gapMax)
       : [];
