@@ -3,11 +3,6 @@ const { MongoClient } = require('mongodb');
 /**
  * Logique de synchronisation Lodgify → MongoDB.
  * Appelée depuis /api/sync (cron) et /api/sync-manual (bouton UI).
- *
- * OPTIMISATIONS :
- * - Diff avant écriture : on ne fait un $set que si les champs clés ont changé
- * - Gap detection limitée : seulement sur les IDs > maxIdInDb (nouveaux IDs)
- *   et parallélisée par lots de 10 pour éviter les timeouts
  */
 
 async function fetchAllPages(lodgifyKey, fromDate, toDate, size) {
@@ -35,10 +30,6 @@ async function fetchAllPages(lodgifyKey, fromDate, toDate, size) {
   return { items, total };
 }
 
-/**
- * Fetch direct d'une réservation par ID.
- * Retourne l'objet ou null si 404/erreur.
- */
 async function fetchById(lodgifyKey, id) {
   try {
     const response = await fetch(
@@ -55,8 +46,7 @@ async function fetchById(lodgifyKey, id) {
 
 /**
  * Gap detection parallélisée par lots.
- * Ne scanne QUE les IDs inconnus dans la plage donnée.
- * @param {number} concurrency - nb de requêtes simultanées (défaut 10)
+ * FIX : fenêtre réduite à +50 (était +500) pour éviter les timeouts.
  */
 async function detectGaps(lodgifyKey, knownIds, minId, maxId, concurrency = 10) {
   const idsToCheck = [];
@@ -76,10 +66,6 @@ async function detectGaps(lodgifyKey, knownIds, minId, maxId, concurrency = 10) 
   return found;
 }
 
-/**
- * Retourne une empreinte des champs significatifs d'une réservation Lodgify.
- * Utilisée pour détecter si une réservation a changé avant de l'écrire en base.
- */
 function bookingFingerprint(b) {
   return JSON.stringify({
     status:       b.status,
@@ -108,6 +94,9 @@ async function runSync(source = 'manual') {
   const uri = `mongodb+srv://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${cluster}/lodgify?appName=revenus`;
   const client = new MongoClient(uri);
 
+  let result = null;
+  let syncError = null;
+
   try {
     await client.connect();
     const col = client.db('lodgify').collection('reservations');
@@ -121,21 +110,19 @@ async function runSync(source = 'manual') {
     const knownIds    = new Set(mainItems.map(b => b.id));
     const maxIdInList = mainItems.length > 0 ? Math.max(...mainItems.map(b => b.id)) : 0;
 
-    // --- Passage 2 : Gap detection uniquement sur les nouveaux IDs ---
-    // On ne scanne que maxIdInDb+1 → maxIdInList+500
-    // (les vieux gaps sont déjà en base, pas besoin de les re-chercher)
+    // --- Passage 2 : Gap detection (fenêtre réduite) ---
     const lastInDb  = await col.findOne({}, { sort: { id: -1 }, projection: { id: 1 } });
     const maxIdInDb = lastInDb ? lastInDb.id : 0;
 
     const gapMin   = maxIdInDb + 1;
-    const gapMax   = Math.max(maxIdInList, maxIdInDb) + 50;
+    const gapMax   = Math.max(maxIdInList, maxIdInDb) + 50; // FIX: était +500
     const gapItems = (gapMin <= gapMax)
       ? await detectGaps(lodgifyKey, knownIds, gapMin, gapMax)
       : [];
 
     const allItems = [...mainItems, ...gapItems];
 
-    // --- Diff : récupérer les empreintes existantes en base ---
+    // --- Diff ---
     const existingIds  = allItems.map(b => b.id);
     const existingDocs = await col
       .find({ id: { $in: existingIds } }, {
@@ -148,13 +135,10 @@ async function runSync(source = 'manual') {
 
     const existingMap = new Map(existingDocs.map(d => [d.id, d]));
 
-    // --- Construire uniquement les ops nécessaires ---
     const ops = [];
     for (const b of allItems) {
       const existing = existingMap.get(b.id);
-
       if (!existing) {
-        // Nouvelle réservation → insert
         ops.push({
           updateOne: {
             filter: { id: b.id },
@@ -162,18 +146,14 @@ async function runSync(source = 'manual') {
             upsert: true,
           }
         });
-      } else {
-        // Réservation existante → comparer l'empreinte
-        if (bookingFingerprint(b) !== bookingFingerprint(existing)) {
-          ops.push({
-            updateOne: {
-              filter: { id: b.id },
-              update: { $set: { ...b, _syncedAt: new Date() } },
-              upsert: false,
-            }
-          });
-        }
-        // Sinon : aucun changement → on ignore
+      } else if (bookingFingerprint(b) !== bookingFingerprint(existing)) {
+        ops.push({
+          updateOne: {
+            filter: { id: b.id },
+            update: { $set: { ...b, _syncedAt: new Date() } },
+            upsert: false,
+          }
+        });
       }
     }
 
@@ -183,7 +163,7 @@ async function runSync(source = 'manual') {
       upserted = writeResult.upsertedCount + writeResult.modifiedCount;
     }
 
-    const result = {
+    result = {
       total,
       fetched:   allItems.length,
       changed:   ops.length,
@@ -192,26 +172,29 @@ async function runSync(source = 'manual') {
       gapFound:  gapItems.length,
       gapIds:    gapItems.map(b => b.id),
       gapRange:  gapItems.length > 0 ? `${gapMin} → ${gapMax}` : 'aucun scan',
+      // FIX : champs manquants retournés par sync-manual
+      recoveredByWorkaround: gapItems.length,
+      recoveredIds:          gapItems.map(b => b.id),
     };
 
-    // Écriture du log de synchronisation
-    try {
-      const logs = client.db('lodgify').collection('sync_logs');
-      await logs.insertOne({
-        executedAt: new Date(),
-        source,
-        ...result,
-        success: true,
-      });
-    } catch (_) {
-      // Ne pas bloquer si l'écriture du log échoue
-    }
-
-    return result;
-
-  } finally {
-    await client.close();
+  } catch (err) {
+    syncError = err;
   }
+
+  // FIX : log systématique, même en cas d'erreur
+  try {
+    const logs = client.db('lodgify').collection('sync_logs');
+    await logs.insertOne(
+      syncError
+        ? { executedAt: new Date(), source, success: false, error: syncError.message }
+        : { executedAt: new Date(), source, ...result, success: true }
+    );
+  } catch (_) {}
+
+  await client.close();
+
+  if (syncError) throw syncError;
+  return result;
 }
 
 module.exports = { runSync };
