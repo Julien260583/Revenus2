@@ -610,6 +610,12 @@
       </div>
       <div class="picker-divider"></div>
       <div class="picker-filters">
+        <select id="status-filter" onchange="loadData()">
+          <option value="confirmed">Confirmées</option>
+          <option value="all">Tous statuts</option>
+          <option value="pending">En attente</option>
+          <option value="cancelled">Annulées</option>
+        </select>
         <select id="source-filter" onchange="loadData()">
           <option value="all">Toutes les sources</option>
           <option value="AirbnbIntegration">Airbnb</option>
@@ -1438,8 +1444,9 @@
         };
       });
 
-      // Garder uniquement les réservations confirmées
-      bookings = bookings.filter(b => b.status === 'confirmed');
+      // Filtre statut (confirmed par défaut, configurable via le select)
+      const statusFilter = document.getElementById('status-filter').value;
+      if (statusFilter !== 'all') bookings = bookings.filter(b => b.status === statusFilter);
 
       // Property filter
       const propFilter = document.getElementById('property-filter').value;
